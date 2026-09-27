@@ -286,15 +286,17 @@
 
   </main>
 
-  <!-- MODAL 1: NEW TRANSACTION -->
+  <!-- MODAL 1: NEW / EDIT TRANSACTION -->
   <div id="txModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-t-2xl sm:rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-        <h3 class="font-bold text-base text-slate-100">Nueva Transacción</h3>
+        <h3 id="txModalTitle" class="font-bold text-base text-slate-100">Nueva Transacción</h3>
         <button onclick="closeTxModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
       <form id="txForm" onsubmit="handleTxSubmit(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="txEditId" value="">
+
         <div>
           <label class="text-slate-400 mb-1 block font-medium">Tipo de Movimiento</label>
           <div class="grid grid-cols-2 gap-2">
@@ -904,11 +906,17 @@
               <span class="text-xs text-slate-400">${t.category} • ${acc ? acc.name : 'N/A'}</span>
             </div>
           </div>
-          <div class="text-right font-mono">
-            <span class="font-bold text-sm block ${isExpense ? 'text-rose-400' : 'text-emerald-400'}">
-              ${isExpense ? '-' : '+'}${formatMoney(t.amount, acc ? acc.currency : appData.mainCurrency)}
-            </span>
-            <span class="text-xs text-slate-500">${t.date}</span>
+          <div class="flex items-center gap-2">
+            <div class="text-right font-mono">
+              <span class="font-bold text-sm block ${isExpense ? 'text-rose-400' : 'text-emerald-400'}">
+                ${isExpense ? '-' : '+'}${formatMoney(t.amount, acc ? acc.currency : appData.mainCurrency)}
+              </span>
+              <span class="text-xs text-slate-500">${t.date}</span>
+            </div>
+            <div class="flex flex-col gap-1 border-l border-slate-700/60 pl-2">
+              <button onclick="editTransaction('${t.id}')" class="text-slate-400 hover:text-brand-400 p-0.5" title="Editar"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-rose-400 p-0.5" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
           </div>
         `;
         container.appendChild(div);
@@ -952,32 +960,78 @@
       }
     }
 
-    // --- MODALS & FORMS ---
+    // --- MODALS & TRANSACTION HANDLERS (NEW, EDIT & DELETE) ---
     function openTxModal() {
+      document.getElementById('txEditId').value = '';
+      document.getElementById('txModalTitle').innerText = 'Nueva Transacción';
+      document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('txForm').reset();
       document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('txModal').classList.remove('hidden');
       lucide.createIcons();
     }
+
+    function editTransaction(id) {
+      const tx = appData.transactions.find(t => t.id === id);
+      if (!tx) return;
+
+      document.getElementById('txEditId').value = tx.id;
+      document.getElementById('txModalTitle').innerText = 'Editar Transacción';
+      
+      const typeRadio = document.querySelector(`input[name="txType"][value="${tx.type}"]`);
+      if (typeRadio) typeRadio.checked = true;
+
+      document.getElementById('txAccount').value = tx.accountId;
+      document.getElementById('txAmount').value = tx.amount;
+      document.getElementById('txDate').value = tx.date;
+      document.getElementById('txCategory').value = tx.category;
+      document.getElementById('txDescription').value = tx.description;
+
+      document.getElementById('txModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
     function closeTxModal() { document.getElementById('txModal').classList.add('hidden'); }
 
     function handleTxSubmit(e) {
       e.preventDefault();
+      const editId = document.getElementById('txEditId').value;
       const type = document.querySelector('input[name="txType"]:checked')?.value || 'EXPENSE';
       const accountId = document.getElementById('txAccount').value;
       const amount = parseFloat(document.getElementById('txAmount').value);
       const date = document.getElementById('txDate').value;
       const category = document.getElementById('txCategory').value;
-      const description = document.getElementById('txDescription').value;
+      const description = document.getElementById('txDescription').value.trim();
 
       if (!accountId || isNaN(amount)) return;
 
-      appData.transactions.push({ id: 'tx-' + Date.now(), type, accountId, amount, date, category, description });
+      if (editId) {
+        const tx = appData.transactions.find(t => t.id === editId);
+        if (tx) {
+          tx.type = type;
+          tx.accountId = accountId;
+          tx.amount = amount;
+          tx.date = date;
+          tx.category = category;
+          tx.description = description;
+        }
+      } else {
+        appData.transactions.push({ id: 'tx-' + Date.now(), type, accountId, amount, date, category, description });
+      }
+
       saveState();
       closeTxModal();
       document.getElementById('txForm').reset();
     }
 
-    // --- ACCOUNT MODAL HANDLERS (CORRECTED SAVE FUNCTIONALITY) ---
+    function deleteTransaction(id) {
+      if (confirm('¿Eliminar esta transacción?')) {
+        appData.transactions = appData.transactions.filter(t => t.id !== id);
+        saveState();
+      }
+    }
+
+    // --- ACCOUNT MODAL HANDLERS ---
     function openAccountModal() {
       document.getElementById('accEditId').value = '';
       document.getElementById('accountModalTitle').innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-brand-500"></i> Nueva Cuenta / Servicio`;
