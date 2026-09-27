@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FinanzApp - Control de Efectivo y TDC</title>
+  
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <!-- PWA Settings -->
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="https://img.icons8.com/isometric/512/wallet.png">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 4px;
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-20">
+
+  <!-- Header & Status Bar -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-3 py-2.5">
+    <div class="max-w-md mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <div class="p-2 bg-brand-500/10 text-brand-500 rounded-xl">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base leading-tight">FinanzApp</h1>
+          <div class="flex items-center gap-1.5 text-xs text-slate-400">
+            <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span id="cloudStatusText">Local</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header Action Controls -->
+      <div class="flex items-center gap-1.5">
+        <!-- Currency Toggle -->
+        <button id="btnToggleCurrency" onclick="toggleMainCurrency()" class="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-lg text-xs font-semibold border border-slate-700 transition">
+          <span id="activeCurrencyLabel" class="text-brand-500 font-bold">CRC ₡</span>
+          <i data-lucide="refresh-cw" class="w-3 h-3 text-slate-400"></i>
+        </button>
+
+        <!-- Firebase Settings Button -->
+        <button onclick="openCloudModal()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition" title="Configurar Nube">
+          <i data-lucide="cloud-cog" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Install PWA Button -->
+        <button id="pwaInstallBtn" onclick="installPWA()" class="hidden p-2 bg-brand-500 text-slate-950 font-semibold rounded-lg shadow transition hover:bg-brand-600" title="Instalar App">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-md mx-auto px-3 py-3 space-y-4">
+
+    <!-- Compact Navigation Tabs (Fits Mobile Without Scroll) -->
+    <nav class="grid grid-cols-4 gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs text-center font-medium">
+      <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active bg-slate-700 text-brand-500 py-1.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Panel</span>
+      </button>
+      <button onclick="switchTab('accounts')" id="tab-accounts" class="tab-btn text-slate-400 py-1.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition">
+        <i data-lucide="credit-card" class="w-4 h-4"></i>
+        <span>Cuentas</span>
+      </button>
+      <button onclick="switchTab('transactions')" id="tab-transactions" class="tab-btn text-slate-400 py-1.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition">
+        <i data-lucide="list-ordered" class="w-4 h-4"></i>
+        <span>Historial</span>
+      </button>
+      <button onclick="switchTab('categories')" id="tab-categories" class="tab-btn text-slate-400 py-1.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition">
+        <i data-lucide="tags" class="w-4 h-4"></i>
+        <span>Categorías</span>
+      </button>
+    </nav>
+
+    <!-- Compact Action Bar -->
+    <div class="flex items-center gap-2">
+      <button onclick="openTxModal()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-slate-950 font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/10 transition active:scale-95 text-sm">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Nueva Transacción</span>
+      </button>
+
+      <!-- Backup JSON Buttons -->
+      <button onclick="exportBackup()" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 transition" title="Exportar JSON">
+        <i data-lucide="upload" class="w-4 h-4"></i>
+      </button>
+      <label class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 cursor-pointer transition" title="Importar JSON">
+        <i data-lucide="download-cloud" class="w-4 h-4"></i>
+        <input type="file" id="importFileInput" onchange="importBackup(event)" accept=".json" class="hidden">
+      </label>
+    </div>
+
+    <!-- Exchange Rate Bar -->
+    <div class="bg-slate-800/50 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between text-xs text-slate-400">
+      <div class="flex items-center gap-1.5">
+        <i data-lucide="arrow-left-right" class="w-3.5 h-3.5 text-brand-500"></i>
+        <span>Tipo de cambio:</span>
+      </div>
+      <div class="flex items-center gap-1 font-mono font-semibold text-slate-200">
+        <span>$1 = ₡</span>
+        <input type="number" id="exchangeRateInput" value="505" onchange="updateExchangeRate(this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-right font-mono text-brand-500 focus:outline-none focus:border-brand-500">
+      </div>
+    </div>
+
+    <!-- VIEW 1: DASHBOARD -->
+    <section id="view-dashboard" class="space-y-4">
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
+          <span class="text-xs text-slate-400 font-medium">Patrimonio Neto</span>
+          <p id="totalNetWorth" class="text-lg font-bold text-slate-100 font-mono mt-0.5">₡0.00</p>
+          <span id="totalNetWorthAlt" class="text-[10px] text-slate-500 font-mono">~$0.00</span>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
+          <span class="text-xs text-slate-400 font-medium">Liquidez Real</span>
+          <p id="totalLiquidity" class="text-lg font-bold text-emerald-400 font-mono mt-0.5">₡0.00</p>
+          <span id="totalLiquidityAlt" class="text-[10px] text-slate-500 font-mono">~$0.00</span>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
+          <span class="text-xs text-slate-400 font-medium">Deuda TDC Total</span>
+          <p id="totalCreditDebt" class="text-lg font-bold text-rose-400 font-mono mt-0.5">₡0.00</p>
+          <span id="totalCreditDebtAlt" class="text-[10px] text-slate-500 font-mono">~$0.00</span>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
+          <span class="text-xs text-slate-400 font-medium">Cupo Disponible TDC</span>
+          <p id="totalCreditAvailable" class="text-lg font-bold text-sky-400 font-mono mt-0.5">₡0.00</p>
+          <span id="totalCreditAvailableAlt" class="text-[10px] text-slate-500 font-mono">~$0.00</span>
+        </div>
+      </div>
+
+      <!-- Chart: Expenses by Category -->
+      <div class="bg-slate-800/80 border border-slate-800 p-3 rounded-xl">
+        <h3 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+          <span>Gastos por Categoría</span>
+          <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-slate-400"></i>
+        </h3>
+        <div class="h-48 relative">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: ACCOUNTS / TDC -->
+    <section id="view-accounts" class="hidden space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-200">Cuentas y Tarjetas</h2>
+        <button onclick="openAccountModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-brand-500 border border-slate-700 font-semibold py-1 px-2.5 rounded-lg flex items-center gap-1">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Nueva Cuenta
+        </button>
+      </div>
+
+      <div id="accountsList" class="space-y-2.5">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- VIEW 3: TRANSACTIONS HISTORIC -->
+    <section id="view-transactions" class="hidden space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-200">Movimientos</h2>
+        <select id="filterType" onchange="renderTransactions()" class="bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-lg px-2 py-1">
+          <option value="ALL">Todos</option>
+          <option value="EXPENSE">Gastos</option>
+          <option value="INCOME">Ingresos</option>
+        </select>
+      </div>
+
+      <div id="transactionsList" class="space-y-2">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- VIEW 4: CATEGORIES -->
+    <section id="view-categories" class="hidden space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-200">Categorías de Gastos</h2>
+      </div>
+      <div id="categoriesList" class="grid grid-cols-2 gap-2">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL 1: NEW TRANSACTION -->
+  <div id="txModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-t-2xl sm:rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="font-bold text-sm text-slate-100">Nueva Transacción</h3>
+        <button onclick="closeTxModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form id="txForm" onsubmit="handleTxSubmit(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-400 mb-1 block">Tipo de Movimiento</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center justify-center gap-1 bg-slate-800 p-2 rounded-lg cursor-pointer border border-slate-700 font-semibold has-[:checked]:border-brand-500 has-[:checked]:text-brand-500">
+              <input type="radio" name="txType" value="EXPENSE" checked onchange="toggleInstallmentFields()" class="hidden">
+              <i data-lucide="arrow-down-right" class="w-4 h-4 text-rose-500"></i> Gasto
+            </label>
+            <label class="flex items-center justify-center gap-1 bg-slate-800 p-2 rounded-lg cursor-pointer border border-slate-700 font-semibold has-[:checked]:border-brand-500 has-[:checked]:text-brand-500">
+              <input type="radio" name="txType" value="INCOME" onchange="toggleInstallmentFields()" class="hidden">
+              <i data-lucide="arrow-up-right" class="w-4 h-4 text-emerald-500"></i> Ingreso
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-slate-400 mb-1 block">Cuenta / Tarjeta Origen</label>
+          <select id="txAccount" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 font-medium">
+            <!-- Rendered dynamically -->
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-slate-400 mb-1 block">Monto</label>
+            <input type="number" id="txAmount" step="0.01" required placeholder="0.00" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 font-mono">
+          </div>
+          <div>
+            <label class="text-slate-400 mb-1 block">Fecha</label>
+            <input type="date" id="txDate" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-slate-400 mb-1 block">Categoría</label>
+          <select id="txCategory" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200">
+            <!-- Rendered dynamically -->
+          </select>
+        </div>
+
+        <div>
+          <label class="text-slate-400 mb-1 block">Descripción / Comercio</label>
+          <input type="text" id="txDescription" required placeholder="Ej. Supermercado / Gasolina" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200">
+        </div>
+
+        <!-- Optional Installments for Credit Cards -->
+        <div id="installmentContainer" class="bg-slate-800/50 p-2.5 rounded-lg border border-slate-800 space-y-2">
+          <label class="flex items-center gap-2 text-slate-300 font-medium cursor-pointer">
+            <input type="checkbox" id="txIsInstallment" onchange="document.getElementById('installmentFields').classList.toggle('hidden', !this.checked)" class="rounded bg-slate-900 border-slate-700 text-brand-500">
+            <span>Diferir a Cuotas (TDC)</span>
+          </label>
+          <div id="installmentFields" class="hidden space-y-2 pt-1">
+            <div>
+              <label class="text-slate-400 mb-1 block">Cantidad de Cuotas / Meses</label>
+              <input type="number" id="txInstallmentCount" min="2" max="48" value="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-bold py-2.5 rounded-xl shadow transition">
+          Guardar Registro
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CLOUD FIREBASE SETTINGS -->
+  <div id="cloudModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+          <i data-lucide="cloud" class="w-4 h-4 text-sky-400"></i> Sincronización Nube
+        </h3>
+        <button onclick="closeCloudModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <p class="text-xs text-slate-400">Ingresa las credenciales de tu proyecto gratuito de Firebase Realtime Database para sincronizar dispositivos en tiempo real.</p>
+
+      <form id="cloudForm" onsubmit="handleCloudConfigSubmit(event)" class="space-y-2 text-xs">
+        <div>
+          <label class="text-slate-400 mb-1 block">Familia / Workspace ID</label>
+          <input type="text" id="fbWorkspace" required placeholder="Ej. FamiliaBlancoPerez" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 font-mono">
+        </div>
+        <div>
+          <label class="text-slate-400 mb-1 block">API Key</label>
+          <input type="text" id="fbApiKey" required placeholder="AIzaSy..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 font-mono">
+        </div>
+        <div>
+          <label class="text-slate-400 mb-1 block">Database URL</label>
+          <input type="url" id="fbDbUrl" required placeholder="https://tu-proyecto.firebaseio.com" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 font-mono">
+        </div>
+
+        <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold py-2.5 rounded-xl shadow transition mt-2">
+          Guardar y Conectar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    // --- APP STATE ---
+    const DEFAULT_DATA = {
+      accounts: [
+        { id: 'acc-1', name: 'Billetera Cash', type: 'CASH', currency: 'CRC', balance: 25000 },
+        { id: 'acc-2', name: 'BAC Débito $', type: 'BANK', currency: 'USD', balance: 350 },
+        { id: 'acc-3', name: 'BAC Visa CashBack', type: 'CREDIT', currency: 'CRC', creditLimit: 500000, closingDay: 15, dueDay: 2 }
+      ],
+      categories: ['Supermercado', 'Gasolina / Transporte', 'Servicios / Utilidades', 'Restaurantes', 'Educación', 'Entretenimiento', 'Salud', 'Hogar'],
+      transactions: [],
+      exchangeRate: 505,
+      mainCurrency: 'CRC',
+      firebaseConfig: null
+    };
+
+    let appData = JSON.parse(localStorage.getItem('finanzapp_data')) || DEFAULT_DATA;
+    let chartInstance = null;
+    let dbRef = null;
+    let deferredPrompt = null;
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initFirebase();
+      renderAll();
+      setupPWA();
+    });
+
+    function saveState() {
+      localStorage.setItem('finanzapp_data', JSON.stringify(appData));
+      if (dbRef) {
+        dbRef.set(appData);
+      }
+      renderAll();
+    }
+
+    // --- PWA SETUP ---
+    function setupPWA() {
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('pwaInstallBtn').classList.remove('hidden');
+      });
+    }
+
+    function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            document.getElementById('pwaInstallBtn').classList.add('hidden');
+          }
+          deferredPrompt = null;
+        });
+      }
+    }
+
+    // --- CURRENCY TOGGLE & CONVERSION ---
+    function toggleMainCurrency() {
+      appData.mainCurrency = appData.mainCurrency === 'CRC' ? 'USD' : 'CRC';
+      document.getElementById('activeCurrencyLabel').innerText = appData.mainCurrency === 'CRC' ? 'CRC ₡' : 'USD $';
+      saveState();
+    }
+
+    function updateExchangeRate(val) {
+      appData.exchangeRate = parseFloat(val) || 505;
+      saveState();
+    }
+
+    function convert(amount, fromCurr, toCurr) {
+      if (fromCurr === toCurr) return amount;
+      if (fromCurr === 'USD' && toCurr === 'CRC') return amount * appData.exchangeRate;
+      if (fromCurr === 'CRC' && toCurr === 'USD') return amount / appData.exchangeRate;
+      return amount;
+    }
+
+    function formatMoney(amount, currency = appData.mainCurrency) {
+      const symbol = currency === 'CRC' ? '₡' : '$';
+      return symbol + ' ' + amount.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // --- UI NAVIGATION ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('bg-slate-700', 'text-brand-500'));
+      document.getElementById(`tab-${tabId}`).classList.add('bg-slate-700', 'text-brand-500');
+
+      ['dashboard', 'accounts', 'transactions', 'categories'].forEach(view => {
+        document.getElementById(`view-${view}`).classList.toggle('hidden', view !== tabId);
+      });
+    }
+
+    // --- RENDER FUNCTIONS ---
+    function renderAll() {
+      document.getElementById('exchangeRateInput').value = appData.exchangeRate;
+      renderDashboard();
+      renderAccounts();
+      renderTransactions();
+      renderCategories();
+      populateSelects();
+    }
+
+    function calculateAccountBalance(acc) {
+      let balance = acc.type === 'CREDIT' ? 0 : (acc.balance || 0);
+      appData.transactions.forEach(tx => {
+        if (tx.accountId === acc.id) {
+          const amount = tx.amount;
+          if (acc.type === 'CREDIT') {
+            if (tx.type === 'EXPENSE') balance += amount;
+            if (tx.type === 'INCOME') balance -= amount;
+          } else {
+            if (tx.type === 'EXPENSE') balance -= amount;
+            if (tx.type === 'INCOME') balance += amount;
+          }
+        }
+      });
+      return balance;
+    }
+
+    function renderDashboard() {
+      const mainCurr = appData.mainCurrency;
+      const altCurr = mainCurr === 'CRC' ? 'USD' : 'CRC';
+
+      let totalLiquidity = 0;
+      let totalCreditDebt = 0;
+      let totalCreditAvailable = 0;
+
+      appData.accounts.forEach(acc => {
+        const currentBal = calculateAccountBalance(acc);
+        const inMainCurr = convert(currentBal, acc.currency, mainCurr);
+
+        if (acc.type === 'CREDIT') {
+          totalCreditDebt += inMainCurr;
+          const limitInMain = convert(acc.creditLimit || 0, acc.currency, mainCurr);
+          totalCreditAvailable += (limitInMain - inMainCurr);
+        } else {
+          totalLiquidity += inMainCurr;
+        }
+      });
+
+      const netWorth = totalLiquidity - totalCreditDebt;
+
+      document.getElementById('totalNetWorth').innerText = formatMoney(netWorth, mainCurr);
+      document.getElementById('totalNetWorthAlt').innerText = '~' + formatMoney(convert(netWorth, mainCurr, altCurr), altCurr);
+
+      document.getElementById('totalLiquidity').innerText = formatMoney(totalLiquidity, mainCurr);
+      document.getElementById('totalLiquidityAlt').innerText = '~' + formatMoney(convert(totalLiquidity, mainCurr, altCurr), altCurr);
+
+      document.getElementById('totalCreditDebt').innerText = formatMoney(totalCreditDebt, mainCurr);
+      document.getElementById('totalCreditDebtAlt').innerText = '~' + formatMoney(convert(totalCreditDebt, mainCurr, altCurr), altCurr);
+
+      document.getElementById('totalCreditAvailable').innerText = formatMoney(totalCreditAvailable, mainCurr);
+      document.getElementById('totalCreditAvailableAlt').innerText = '~' + formatMoney(convert(totalCreditAvailable, mainCurr, altCurr), altCurr);
+
+      renderChart();
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      const catTotals = {};
+
+      appData.transactions.filter(t => t.type === 'EXPENSE').forEach(t => {
+        const acc = appData.accounts.find(a => a.id === t.accountId);
+        const amountInMain = convert(t.amount, acc ? acc.currency : 'CRC', appData.mainCurrency);
+        catTotals[t.category] = (catTotals[t.category] || 0) + amountInMain;
+      });
+
+      const labels = Object.keys(catTotals);
+      const data = Object.values(catTotals);
+
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels.length ? labels : ['Sin Datos'],
+          datasets: [{
+            data: data.length ? data : [1],
+            backgroundColor: ['#22c55e', '#38bdf8', '#f43f5e', '#a855f7', '#eab308', '#ec4899', '#64748b']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    function renderAccounts() {
+      const container = document.getElementById('accountsList');
+      container.innerHTML = '';
+
+      appData.accounts.forEach(acc => {
+        const bal = calculateAccountBalance(acc);
+        const isCredit = acc.type === 'CREDIT';
+
+        const div = document.createElement('div');
+        div.className = 'bg-slate-800/90 border border-slate-800 p-3 rounded-xl space-y-2';
+
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="p-2 rounded-lg ${isCredit ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">
+                <i data-lucide="${isCredit ? 'credit-card' : 'wallet'}" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs text-slate-100">${acc.name}</h4>
+                <span class="text-[10px] text-slate-400">${acc.currency} • ${isCredit ? 'Tarjeta de Crédito' : 'Cuenta/Efectivo'}</span>
+              </div>
+            </div>
+            <button onclick="deleteAccount('${acc.id}')" class="text-slate-500 hover:text-rose-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+
+          <div class="flex items-end justify-between font-mono">
+            <div>
+              <span class="text-[10px] text-slate-400 block">${isCredit ? 'Deuda Acumulada' : 'Saldo Disponible'}</span>
+              <span class="text-sm font-bold ${isCredit ? 'text-rose-400' : 'text-emerald-400'}">${formatMoney(bal, acc.currency)}</span>
+            </div>
+            ${isCredit ? `
+              <div class="text-right">
+                <span class="text-[10px] text-slate-400 block">Límite Crédito</span>
+                <span class="text-xs text-slate-300">${formatMoney(acc.creditLimit, acc.currency)}</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+        container.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    function renderTransactions() {
+      const container = document.getElementById('transactionsList');
+      const filter = document.getElementById('filterType').value;
+      container.innerHTML = '';
+
+      const list = appData.transactions.filter(t => filter === 'ALL' || t.type === filter);
+
+      if (!list.length) {
+        container.innerHTML = `<p class="text-center text-xs text-slate-500 py-4">No hay transacciones registradas.</p>`;
+        return;
+      }
+
+      list.slice().reverse().forEach(t => {
+        const acc = appData.accounts.find(a => a.id === t.accountId);
+        const isExpense = t.type === 'EXPENSE';
+
+        const div = document.createElement('div');
+        div.className = 'bg-slate-800/60 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs';
+
+        div.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 rounded-lg ${isExpense ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">
+              <i data-lucide="${isExpense ? 'arrow-down-right' : 'arrow-up-right'}" class="w-3.5 h-3.5"></i>
+            </div>
+            <div>
+              <p class="font-semibold text-slate-200">${t.description}</p>
+              <span class="text-[10px] text-slate-400">${t.category} • ${acc ? acc.name : 'N/A'}</span>
+            </div>
+          </div>
+          <div class="text-right font-mono">
+            <span class="font-bold block ${isExpense ? 'text-rose-400' : 'text-emerald-400'}">
+              ${isExpense ? '-' : '+'}${formatMoney(t.amount, acc ? acc.currency : appData.mainCurrency)}
+            </span>
+            <span class="text-[10px] text-slate-500">${t.date}</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('categoriesList');
+      container.innerHTML = '';
+
+      appData.categories.forEach(cat => {
+        const div = document.createElement('div');
+        div.className = 'bg-slate-800/60 border border-slate-800 p-2 rounded-lg text-xs font-medium text-slate-300 flex items-center justify-between';
+        div.innerHTML = `
+          <span class="flex items-center gap-1.5"><i data-lucide="tag" class="w-3.5 h-3.5 text-brand-500"></i> ${cat}</span>
+        `;
+        container.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    function populateSelects() {
+      const accSelect = document.getElementById('txAccount');
+      accSelect.innerHTML = appData.accounts.map(a => `<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+
+      const catSelect = document.getElementById('txCategory');
+      catSelect.innerHTML = appData.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    // --- MODALS & FORMS ---
+    function openTxModal() {
+      document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+    function closeTxModal() { document.getElementById('txModal').classList.add('hidden'); }
+
+    function handleTxSubmit(e) {
+      e.preventDefault();
+      const type = document.querySelector('input[name="txType"]:checked').value;
+      const accountId = document.getElementById('txAccount').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const date = document.getElementById('txDate').value;
+      const category = document.getElementById('txCategory').value;
+      const description = document.getElementById('txDescription').value;
+
+      appData.transactions.push({ id: 'tx-' + Date.now(), type, accountId, amount, date, category, description });
+      saveState();
+      closeTxModal();
+    }
+
+    function deleteAccount(id) {
+      if (confirm('¿Eliminar esta cuenta y su historial?')) {
+        appData.accounts = appData.accounts.filter(a => a.id !== id);
+        saveState();
+      }
+    }
+
+    // --- BACKUP JSON ---
+    function exportBackup() {
+      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `finanzapp_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+    }
+
+    function importBackup(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          appData = JSON.parse(evt.target.result);
+          saveState();
+          alert('¡Respaldo importado con éxito!');
+        } catch (err) {
+          alert('Archivo JSON no válido.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // --- CLOUD FIREBASE SYNC ---
+    function openCloudModal() { document.getElementById('cloudModal').classList.remove('hidden'); }
+    function closeCloudModal() { document.getElementById('cloudModal').classList.add('hidden'); }
+
+    function handleCloudConfigSubmit(e) {
+      e.preventDefault();
+      const workspace = document.getElementById('fbWorkspace').value;
+      const apiKey = document.getElementById('fbApiKey').value;
+      const databaseURL = document.getElementById('fbDbUrl').value;
+
+      appData.firebaseConfig = { workspace, apiKey, databaseURL };
+      saveState();
+      initFirebase();
+      closeCloudModal();
+    }
+
+    function initFirebase() {
+      if (!appData.firebaseConfig) return;
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp({
+            apiKey: appData.firebaseConfig.apiKey,
+            databaseURL: appData.firebaseConfig.databaseURL
+          });
+        }
+        dbRef = firebase.database().ref('workspaces/' + appData.firebaseConfig.workspace);
+        
+        dbRef.on('value', (snapshot) => {
+          const val = snapshot.val();
+          if (val) {
+            appData = val;
+            localStorage.setItem('finanzapp_data', JSON.stringify(appData));
+            renderAll();
+          }
+        });
+
+        document.getElementById('cloudStatusDot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+        document.getElementById('cloudStatusText').innerText = 'Sincronizado';
+      } catch (err) {
+        console.error("Firebase error:", err);
+      }
+    }
+  </script>
+</body>
+</html>
