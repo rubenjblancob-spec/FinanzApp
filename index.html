@@ -157,28 +157,59 @@
         </div>
       </div>
 
-      <!-- Summary Cards -->
+      <!-- Summary Cards (Interactive with Breakdown Modals) -->
       <div class="grid grid-cols-2 gap-2.5">
-        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
-          <span class="text-xs text-slate-400 font-medium">Patrimonio Neto</span>
-          <p id="totalNetWorth" class="text-xl font-bold text-slate-100 font-mono mt-1">₡0.00</p>
+        
+        <!-- patrimonio neto (Full Width) -->
+        <div onclick="showBreakdown('NET_WORTH')" class="col-span-2 bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer hover:border-brand-500/50 transition relative group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400 font-medium">Patrimonio Neto</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-brand-400 transition"></i>
+          </div>
+          <p id="totalNetWorth" class="text-2xl font-bold text-slate-100 font-mono mt-1">₡0.00</p>
           <span id="totalNetWorthAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
         </div>
-        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
-          <span class="text-xs text-slate-400 font-medium">Liquidez Real</span>
-          <p id="totalLiquidity" class="text-xl font-bold text-emerald-400 font-mono mt-1">₡0.00</p>
+
+        <!-- Liquidez Real -->
+        <div onclick="showBreakdown('LIQUIDITY')" class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer hover:border-emerald-500/50 transition group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400 font-medium">Liquidez Real</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition"></i>
+          </div>
+          <p id="totalLiquidity" class="text-lg font-bold text-emerald-400 font-mono mt-1">₡0.00</p>
           <span id="totalLiquidityAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
         </div>
-        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
-          <span class="text-xs text-slate-400 font-medium">Deuda TDC Total</span>
-          <p id="totalCreditDebt" class="text-xl font-bold text-rose-400 font-mono mt-1">₡0.00</p>
+
+        <!-- Deuda TDC Total -->
+        <div onclick="showBreakdown('DEBT')" class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer hover:border-rose-500/50 transition group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400 font-medium">Deuda TDC Total</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-rose-400 transition"></i>
+          </div>
+          <p id="totalCreditDebt" class="text-lg font-bold text-rose-400 font-mono mt-1">₡0.00</p>
           <span id="totalCreditDebtAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
         </div>
-        <div class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl">
-          <span class="text-xs text-slate-400 font-medium">Cupo Disponible TDC</span>
-          <p id="totalCreditAvailable" class="text-xl font-bold text-sky-400 font-mono mt-1">₡0.00</p>
-          <span id="totalCreditAvailableAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
+
+        <!-- Total Ahorrado -->
+        <div onclick="showBreakdown('SAVINGS')" class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer hover:border-sky-500/50 transition group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400 font-medium">Total Ahorrado</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition"></i>
+          </div>
+          <p id="totalSavings" class="text-lg font-bold text-sky-400 font-mono mt-1">₡0.00</p>
+          <span id="totalSavingsAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
         </div>
+
+        <!-- Pagar Quincenal (Strict 1-15 / 16-31 Rule) -->
+        <div onclick="showBreakdown('FORTNIGHT')" class="bg-slate-800/90 border border-slate-800 p-3 rounded-xl cursor-pointer hover:border-amber-500/50 transition group">
+          <div class="flex items-center justify-between">
+            <span id="fortnightLabel" class="text-xs text-slate-400 font-medium">A Pagar (Quincena)</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition"></i>
+          </div>
+          <p id="totalFortnight" class="text-lg font-bold text-amber-400 font-mono mt-1">₡0.00</p>
+          <span id="totalFortnightAlt" class="text-xs text-slate-500 font-mono">~$0.00</span>
+        </div>
+
       </div>
 
       <!-- Chart 1: Income vs Expenses -->
@@ -286,6 +317,27 @@
 
   </main>
 
+  <!-- MODAL: BREAKDOWN DETAILS (CARD CLICK) -->
+  <div id="breakdownModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 id="breakdownTitle" class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <!-- Title populated dynamically -->
+        </h3>
+        <button onclick="closeBreakdownModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div id="breakdownList" class="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-1 text-xs">
+        <!-- Details rendered dynamically -->
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-between items-center text-xs font-bold">
+        <span class="text-slate-400">Total en pantalla:</span>
+        <span id="breakdownTotal" class="text-sm font-mono text-brand-400">₡0.00</span>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 1: NEW / EDIT TRANSACTION -->
   <div id="txModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-t-2xl sm:rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
@@ -341,20 +393,6 @@
           <input type="text" id="txDescription" required placeholder="Ej. Pago Internet / Supermercado" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
         </div>
 
-        <!-- Optional Installments for Credit Cards -->
-        <div id="installmentContainer" class="bg-slate-800/50 p-3 rounded-lg border border-slate-800 space-y-2">
-          <label class="flex items-center gap-2 text-slate-300 font-medium cursor-pointer">
-            <input type="checkbox" id="txIsInstallment" onchange="document.getElementById('installmentFields').classList.toggle('hidden', !this.checked)" class="rounded bg-slate-900 border-slate-700 text-brand-500">
-            <span>Diferir a Cuotas (TDC)</span>
-          </label>
-          <div id="installmentFields" class="hidden space-y-2 pt-1">
-            <div>
-              <label class="text-slate-400 mb-1 block font-medium">Cantidad de Cuotas / Meses</label>
-              <input type="number" id="txInstallmentCount" min="2" max="48" value="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 text-sm">
-            </div>
-          </div>
-        </div>
-
         <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-extrabold py-3 rounded-xl shadow transition text-sm">
           Guardar Registro
         </button>
@@ -362,7 +400,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: NEW / EDIT ACCOUNT -->
+  <!-- MODAL 2: NEW / EDIT ACCOUNT (INCLUDES SAVINGS TYPE) -->
   <div id="accountModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -377,14 +415,15 @@
 
         <div>
           <label class="text-slate-400 mb-1 block font-medium">Nombre</label>
-          <input type="text" id="accName" required placeholder="Ej. BAC Visa / Internet Casa / Préstamo Auto" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
+          <input type="text" id="accName" required placeholder="Ej. BAC Visa / Ahorro Vacaciones / Internet" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="text-slate-400 mb-1 block font-medium">Tipo</label>
             <select id="accType" required onchange="toggleCreditFields()" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-medium text-sm">
-              <option value="BANK">Banco / Débito</option>
+              <option value="BANK">Banco / Corriente</option>
+              <option value="SAVINGS">Cuenta de Ahorro</option>
               <option value="CASH">Efectivo</option>
               <option value="CREDIT">Tarjeta de Crédito</option>
               <option value="LOAN">Préstamo / Crédito</option>
@@ -498,8 +537,9 @@
       accounts: [
         { id: 'acc-1', name: 'Billetera Cash', type: 'CASH', currency: 'CRC', balance: 25000 },
         { id: 'acc-2', name: 'BAC Débito $', type: 'BANK', currency: 'USD', balance: 350 },
-        { id: 'acc-3', name: 'BAC Visa CashBack', type: 'CREDIT', currency: 'CRC', creditLimit: 500000, closingDay: 15, dueDay: 2 },
-        { id: 'acc-4', name: 'Internet Casa (ICE/Kolbi)', type: 'SERVICE', currency: 'CRC', balance: 30000, dueDaySimple: 10 }
+        { id: 'acc-3', name: 'Meta Vacaciones', type: 'SAVINGS', currency: 'CRC', balance: 120000 },
+        { id: 'acc-4', name: 'BAC Visa CashBack', type: 'CREDIT', currency: 'CRC', creditLimit: 500000, closingDay: 15, dueDay: 2 },
+        { id: 'acc-5', name: 'Internet Casa (ICE/Kolbi)', type: 'SERVICE', currency: 'CRC', balance: 30000, dueDaySimple: 10 }
       ],
       categories: ['Supermercado', 'Gasolina / Transporte', 'Servicios / Utilidades', 'Restaurantes', 'Educación', 'Entretenimiento', 'Salud', 'Hogar'],
       transactions: [],
@@ -661,25 +701,38 @@
 
       let totalLiquidity = 0;
       let totalCreditDebt = 0;
-      let totalCreditAvailable = 0;
+      let totalSavings = 0;
+      let totalFortnight = 0;
+
+      const todayDay = new Date().getDate();
+      const isFirstFortnight = todayDay <= 15;
+
+      document.getElementById('fortnightLabel').innerText = isFirstFortnight ? 'A Pagar (1ra Qna 1-15)' : 'A Pagar (2da Qna 16-31)';
 
       appData.accounts.forEach(acc => {
-        if (acc.type === 'SERVICE') return;
         const currentBal = calculateAccountBalance(acc);
         const inMainCurr = convert(currentBal, acc.currency, mainCurr);
 
         if (acc.type === 'CREDIT' || acc.type === 'LOAN') {
           totalCreditDebt += inMainCurr;
-          if (acc.type === 'CREDIT') {
-            const limitInMain = convert(acc.creditLimit || 0, acc.currency, mainCurr);
-            totalCreditAvailable += (limitInMain - inMainCurr);
-          }
-        } else {
+        } else if (acc.type === 'SAVINGS') {
+          totalSavings += inMainCurr;
+        } else if (acc.type === 'BANK' || acc.type === 'CASH') {
           totalLiquidity += inMainCurr;
+        }
+
+        // Fortnight Calculation: Strict Day 1-15 vs 16-31 Range
+        const dueDay = acc.dueDay || acc.dueDaySimple;
+        if (dueDay) {
+          const belongsToCurrentFortnight = isFirstFortnight ? (dueDay >= 1 && dueDay <= 15) : (dueDay >= 16 && dueDay <= 31);
+          if (belongsToCurrentFortnight) {
+            const amountToPay = acc.type === 'CREDIT' ? currentBal : (acc.balance || 0);
+            totalFortnight += convert(amountToPay, acc.currency, mainCurr);
+          }
         }
       });
 
-      const netWorth = totalLiquidity - totalCreditDebt;
+      const netWorth = (totalLiquidity + totalSavings) - totalCreditDebt;
 
       document.getElementById('totalNetWorth').innerText = formatMoney(netWorth, mainCurr);
       document.getElementById('totalNetWorthAlt').innerText = '~' + formatMoney(convert(netWorth, mainCurr, altCurr), altCurr);
@@ -690,10 +743,99 @@
       document.getElementById('totalCreditDebt').innerText = formatMoney(totalCreditDebt, mainCurr);
       document.getElementById('totalCreditDebtAlt').innerText = '~' + formatMoney(convert(totalCreditDebt, mainCurr, altCurr), altCurr);
 
-      document.getElementById('totalCreditAvailable').innerText = formatMoney(totalCreditAvailable, mainCurr);
-      document.getElementById('totalCreditAvailableAlt').innerText = '~' + formatMoney(convert(totalCreditAvailable, mainCurr, altCurr), altCurr);
+      document.getElementById('totalSavings').innerText = formatMoney(totalSavings, mainCurr);
+      document.getElementById('totalSavingsAlt').innerText = '~' + formatMoney(convert(totalSavings, mainCurr, altCurr), altCurr);
+
+      document.getElementById('totalFortnight').innerText = formatMoney(totalFortnight, mainCurr);
+      document.getElementById('totalFortnightAlt').innerText = '~' + formatMoney(convert(totalFortnight, mainCurr, altCurr), altCurr);
 
       renderCharts();
+    }
+
+    // --- BREAKDOWN MODAL LOGIC (ON CARD CLICK) ---
+    function showBreakdown(type) {
+      const modal = document.getElementById('breakdownModal');
+      const titleEl = document.getElementById('breakdownTitle');
+      const listEl = document.getElementById('breakdownList');
+      const totalEl = document.getElementById('breakdownTotal');
+
+      listEl.innerHTML = '';
+      let runningTotal = 0;
+      const mainCurr = appData.mainCurrency;
+
+      const todayDay = new Date().getDate();
+      const isFirstFortnight = todayDay <= 15;
+
+      if (type === 'NET_WORTH') {
+        titleEl.innerHTML = `<i data-lucide="pie-chart" class="w-5 h-5 text-brand-400"></i> Desglose Patrimonio Neto`;
+      } else if (type === 'LIQUIDITY') {
+        titleEl.innerHTML = `<i data-lucide="wallet" class="w-5 h-5 text-emerald-400"></i> Desglose Liquidez Real`;
+      } else if (type === 'DEBT') {
+        titleEl.innerHTML = `<i data-lucide="credit-card" class="w-5 h-5 text-rose-400"></i> Desglose Deudas TDC / Préstamos`;
+      } else if (type === 'SAVINGS') {
+        titleEl.innerHTML = `<i data-lucide="piggy-bank" class="w-5 h-5 text-sky-400"></i> Desglose Cuentas de Ahorro`;
+      } else if (type === 'FORTNIGHT') {
+        titleEl.innerHTML = `<i data-lucide="calendar" class="w-5 h-5 text-amber-400"></i> Pagos Quincena (${isFirstFortnight ? 'Días 1-15' : 'Días 16-31'})`;
+      }
+
+      appData.accounts.forEach(acc => {
+        const currentBal = calculateAccountBalance(acc);
+        const inMainCurr = convert(currentBal, acc.currency, mainCurr);
+        let includeInList = false;
+        let displayAmount = inMainCurr;
+        let noteText = acc.currency;
+
+        if (type === 'NET_WORTH') {
+          if (acc.type !== 'SERVICE') {
+            includeInList = true;
+            if (acc.type === 'CREDIT' || acc.type === 'LOAN') displayAmount = -inMainCurr;
+          }
+        } else if (type === 'LIQUIDITY' && (acc.type === 'BANK' || acc.type === 'CASH')) {
+          includeInList = true;
+        } else if (type === 'DEBT' && (acc.type === 'CREDIT' || acc.type === 'LOAN')) {
+          includeInList = true;
+        } else if (type === 'SAVINGS' && acc.type === 'SAVINGS') {
+          includeInList = true;
+        } else if (type === 'FORTNIGHT') {
+          const dueDay = acc.dueDay || acc.dueDaySimple;
+          if (dueDay) {
+            const belongs = isFirstFortnight ? (dueDay >= 1 && dueDay <= 15) : (dueDay >= 16 && dueDay <= 31);
+            if (belongs) {
+              includeInList = true;
+              displayAmount = convert(acc.type === 'CREDIT' ? currentBal : (acc.balance || 0), acc.currency, mainCurr);
+              noteText = `Pago el día ${dueDay}`;
+            }
+          }
+        }
+
+        if (includeInList) {
+          runningTotal += displayAmount;
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700/60';
+          div.innerHTML = `
+            <div>
+              <p class="font-bold text-slate-200">${acc.name}</p>
+              <span class="text-[10px] text-slate-400">${acc.type} • ${noteText}</span>
+            </div>
+            <span class="font-mono font-bold ${displayAmount < 0 ? 'text-rose-400' : 'text-slate-100'}">
+              ${formatMoney(displayAmount, mainCurr)}
+            </span>
+          `;
+          listEl.appendChild(div);
+        }
+      });
+
+      if (!listEl.children.length) {
+        listEl.innerHTML = `<p class="text-center text-slate-500 py-4">No hay ítems para mostrar en esta categoría.</p>`;
+      }
+
+      totalEl.innerText = formatMoney(runningTotal, mainCurr);
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeBreakdownModal() {
+      document.getElementById('breakdownModal').classList.add('hidden');
     }
 
     // --- CHARTS LOGIC ---
@@ -808,18 +950,23 @@
         const isCredit = acc.type === 'CREDIT';
         const isService = acc.type === 'SERVICE';
         const isLoan = acc.type === 'LOAN';
+        const isSavings = acc.type === 'SAVINGS';
 
         const div = document.createElement('div');
         div.className = 'bg-slate-800/90 border border-slate-800 p-3 rounded-xl space-y-2';
 
         let iconName = 'wallet';
         let badgeStyle = 'bg-emerald-500/10 text-emerald-400';
-        let typeLabel = 'Cuenta / Efectivo';
+        let typeLabel = 'Cuenta Corriente';
 
         if (isCredit) {
           iconName = 'credit-card';
           badgeStyle = 'bg-rose-500/10 text-rose-400';
           typeLabel = 'Tarjeta de Crédito';
+        } else if (isSavings) {
+          iconName = 'piggy-bank';
+          badgeStyle = 'bg-sky-500/10 text-sky-400';
+          typeLabel = 'Cuenta de Ahorro';
         } else if (isService) {
           iconName = 'zap';
           badgeStyle = 'bg-amber-500/10 text-amber-400';
@@ -850,7 +997,7 @@
           <div class="flex items-end justify-between font-mono pt-1">
             <div>
               <span class="text-xs text-slate-400 block">${isCredit || isLoan ? 'Deuda / Monto' : (isService ? 'Monto Mensual' : 'Saldo Disponible')}</span>
-              <span class="text-base font-bold ${isCredit || isLoan ? 'text-rose-400' : (isService ? 'text-amber-400' : 'text-emerald-400')}">${formatMoney(bal, acc.currency)}</span>
+              <span class="text-base font-bold ${isCredit || isLoan ? 'text-rose-400' : (isService ? 'text-amber-400' : (isSavings ? 'text-sky-400' : 'text-emerald-400'))}">${formatMoney(bal, acc.currency)}</span>
             </div>
             ${isCredit ? `
               <div class="text-right">
@@ -960,7 +1107,7 @@
       }
     }
 
-    // --- MODALS & TRANSACTION HANDLERS (NEW, EDIT & DELETE) ---
+    // --- MODALS & TRANSACTION HANDLERS ---
     function openTxModal() {
       document.getElementById('txEditId').value = '';
       document.getElementById('txModalTitle').innerText = 'Nueva Transacción';
