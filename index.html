@@ -427,7 +427,7 @@
         </div>
 
         <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-extrabold py-3 rounded-xl shadow transition text-sm mt-2">
-          Guardar
+          Guardar Cuenta
         </button>
       </form>
     </div>
@@ -456,7 +456,7 @@
     </div>
   </div>
 
-  <!-- MODAL 4: CLOUD FIREBASE SETTINGS (PROTECTED / MASKED) -->
+  <!-- MODAL 4: CLOUD FIREBASE SETTINGS -->
   <div id="cloudModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3">
       <div class="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -466,7 +466,7 @@
         <button onclick="closeCloudModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
-      <p class="text-xs text-slate-400">Ingresa las credenciales de tu proyecto de Firebase Realtime Database. Por tu seguridad, las claves guardadas se muestran ocultas.</p>
+      <p class="text-xs text-slate-400">Ingresa las credenciales de tu proyecto de Firebase Realtime Database para sincronizar dispositivos en tiempo real.</p>
 
       <form id="cloudForm" onsubmit="handleCloudConfigSubmit(event)" class="space-y-2.5 text-xs">
         <div>
@@ -570,7 +570,7 @@
 
     function formatMoney(amount, currency = appData.mainCurrency) {
       const symbol = currency === 'CRC' ? '₡' : '$';
-      return symbol + ' ' + amount.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return symbol + ' ' + (amount || 0).toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     // --- UI NAVIGATION ---
@@ -592,6 +592,7 @@
       renderTransactions();
       renderCategories();
       populateSelects();
+      lucide.createIcons();
     }
 
     function calculateAccountBalance(acc) {
@@ -693,7 +694,7 @@
       renderCharts();
     }
 
-    // --- CHARTS LOGIC (CATEGORY & INCOME VS EXPENSE) ---
+    // --- CHARTS LOGIC ---
     function isTxInPeriod(txDateStr, period) {
       if (!txDateStr) return false;
       const txDate = new Date(txDateStr);
@@ -864,7 +865,6 @@
         `;
         container.appendChild(div);
       });
-      lucide.createIcons();
     }
 
     function renderTransactions() {
@@ -913,7 +913,6 @@
         `;
         container.appendChild(div);
       });
-      lucide.createIcons();
     }
 
     function renderCategories() {
@@ -931,7 +930,6 @@
         `;
         container.appendChild(div);
       });
-      lucide.createIcons();
     }
 
     function populateSelects() {
@@ -958,6 +956,7 @@
     function openTxModal() {
       document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('txModal').classList.remove('hidden');
+      lucide.createIcons();
     }
     function closeTxModal() { document.getElementById('txModal').classList.add('hidden'); }
 
@@ -978,7 +977,7 @@
       document.getElementById('txForm').reset();
     }
 
-    // --- ACCOUNT MODAL HANDLERS (NEW & EDIT) ---
+    // --- ACCOUNT MODAL HANDLERS (CORRECTED SAVE FUNCTIONALITY) ---
     function openAccountModal() {
       document.getElementById('accEditId').value = '';
       document.getElementById('accountModalTitle').innerHTML = `<i data-lucide="plus-circle" class="w-5 h-5 text-brand-500"></i> Nueva Cuenta / Servicio`;
@@ -1032,43 +1031,43 @@
     function handleAccountSubmit(e) {
       e.preventDefault();
       const editId = document.getElementById('accEditId').value;
-      const name = document.getElementById('accName').value;
+      const name = document.getElementById('accName').value.trim();
       const type = document.getElementById('accType').value;
       const currency = document.getElementById('accCurrency').value;
 
+      if (!name) return;
+
       if (editId) {
-        // Update existing account
         const acc = appData.accounts.find(a => a.id === editId);
         if (acc) {
           acc.name = name;
           acc.type = type;
           acc.currency = currency;
-          acc.balance = type === 'CREDIT' ? 0 : parseFloat(document.getElementById('accInitialBalance').value || 0);
+          acc.balance = type === 'CREDIT' ? 0 : (parseFloat(document.getElementById('accInitialBalance').value) || 0);
 
           if (type === 'CREDIT') {
-            acc.creditLimit = parseFloat(document.getElementById('accCreditLimit').value || 0);
-            acc.closingDay = parseInt(document.getElementById('accClosingDay').value || 15);
-            acc.dueDay = parseInt(document.getElementById('accDueDay').value || 2);
+            acc.creditLimit = parseFloat(document.getElementById('accCreditLimit').value) || 0;
+            acc.closingDay = parseInt(document.getElementById('accClosingDay').value) || 15;
+            acc.dueDay = parseInt(document.getElementById('accDueDay').value) || 2;
           } else if (type === 'SERVICE' || type === 'LOAN') {
-            acc.dueDaySimple = parseInt(document.getElementById('accDueDaySimple').value || 15);
+            acc.dueDaySimple = parseInt(document.getElementById('accDueDaySimple').value) || 15;
           }
         }
       } else {
-        // Create new account
         const newAcc = {
           id: 'acc-' + Date.now(),
           name,
           type,
           currency,
-          balance: type === 'CREDIT' ? 0 : parseFloat(document.getElementById('accInitialBalance').value || 0)
+          balance: type === 'CREDIT' ? 0 : (parseFloat(document.getElementById('accInitialBalance').value) || 0)
         };
 
         if (type === 'CREDIT') {
-          newAcc.creditLimit = parseFloat(document.getElementById('accCreditLimit').value || 0);
-          newAcc.closingDay = parseInt(document.getElementById('accClosingDay').value || 15);
-          newAcc.dueDay = parseInt(document.getElementById('accDueDay').value || 2);
+          newAcc.creditLimit = parseFloat(document.getElementById('accCreditLimit').value) || 0;
+          newAcc.closingDay = parseInt(document.getElementById('accClosingDay').value) || 15;
+          newAcc.dueDay = parseInt(document.getElementById('accDueDay').value) || 2;
         } else if (type === 'SERVICE' || type === 'LOAN') {
-          newAcc.dueDaySimple = parseInt(document.getElementById('accDueDaySimple').value || 15);
+          newAcc.dueDaySimple = parseInt(document.getElementById('accDueDaySimple').value) || 15;
         }
 
         appData.accounts.push(newAcc);
@@ -1089,6 +1088,7 @@
     // --- CATEGORIES HANDLERS ---
     function openCategoryModal() {
       document.getElementById('categoryModal').classList.remove('hidden');
+      lucide.createIcons();
     }
     function closeCategoryModal() {
       document.getElementById('categoryModal').classList.add('hidden');
@@ -1138,7 +1138,7 @@
       reader.readAsText(file);
     }
 
-    // --- CLOUD FIREBASE SYNC (PROTECTED / MASKED) ---
+    // --- CLOUD FIREBASE SYNC ---
     function openCloudModal() {
       if (appData.firebaseConfig) {
         document.getElementById('fbWorkspace').value = appData.firebaseConfig.workspace || '';
@@ -1146,6 +1146,7 @@
         document.getElementById('fbDbUrl').value = appData.firebaseConfig.databaseURL ? '••••••••••••••••••••' : '';
       }
       document.getElementById('cloudModal').classList.remove('hidden');
+      lucide.createIcons();
     }
 
     function closeCloudModal() { document.getElementById('cloudModal').classList.add('hidden'); }
@@ -1156,7 +1157,6 @@
       let apiKey = document.getElementById('fbApiKey').value;
       let databaseURL = document.getElementById('fbDbUrl').value;
 
-      // Keep existing masked keys if unchanged
       if (apiKey === '••••••••••••••••••••' && appData.firebaseConfig) {
         apiKey = appData.firebaseConfig.apiKey;
       }
