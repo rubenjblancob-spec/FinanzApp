@@ -343,6 +343,7 @@
     </div>
   </div>
 
+  <!-- MODAL CUENTAS -->
   <div id="accountModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -376,7 +377,7 @@
           </div>
         </div>
         <div id="accBalanceGroup">
-          <label id="accBalanceLabel" class="text-slate-400 mb-1 block font-medium">Saldo</label>
+          <label id="accBalanceLabel" class="text-slate-400 mb-1 block font-medium">Saldo Inicial / Factura</label>
           <input type="number" id="accBalance" step="0.01" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-sm">
         </div>
         <div id="accDebtGroup" class="hidden space-y-3">
@@ -436,8 +437,8 @@
       </div>
       <form id="cloudForm" onsubmit="handleCloudConfigSubmit(event)" class="space-y-2.5 text-xs">
         <div>
-          <label class="text-slate-400 mb-1 block font-medium">Workspace ID (Mismo en todos tus cel)</label>
-          <input type="text" id="fbWorkspace" required placeholder="Ej. FinanzApp" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-sm">
+          <label class="text-slate-400 mb-1 block font-medium">Workspace ID</label>
+          <input type="text" id="fbWorkspace" required placeholder="Ej. FamiliaBlancoPerez" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-sm">
         </div>
         <div>
           <label class="text-slate-400 mb-1 block font-medium">API Key</label>
@@ -475,6 +476,11 @@
     let incomeExpenseChartInstance = null;
     let dbRef = null;
 
+    // Sanear estructuras iniciales
+    if (!appData.accounts) appData.accounts = [];
+    if (!appData.transactions) appData.transactions = [];
+    if (!appData.categories) appData.categories = [];
+
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       initFirebase();
@@ -506,12 +512,12 @@
 
     function convert(amount, fromCurr, toCurr) {
       if (fromCurr === toCurr) return amount;
-      if (fromCurr === 'USD' && toCurr === 'CRC') return amount * appData.exchangeRate;
-      if (fromCurr === 'CRC' && toCurr === 'USD') return amount / appData.exchangeRate;
+      if (fromCurr === 'USD' && toCurr === 'CRC') return amount * (appData.exchangeRate || 505);
+      if (fromCurr === 'CRC' && toCurr === 'USD') return amount / (appData.exchangeRate || 505);
       return amount;
     }
 
-    function formatMoney(amount, currency = appData.mainCurrency) {
+    function formatMoney(amount, currency = (appData.mainCurrency || 'CRC')) {
       const symbol = currency === 'CRC' ? '₡' : '$';
       return symbol + ' ' + (amount || 0).toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
@@ -540,7 +546,7 @@
 
       if (acc.type === 'BANK' || acc.type === 'CASH' || acc.type === 'SAVINGS') {
         balance = acc.balance || 0;
-        appData.transactions.forEach(tx => {
+        (appData.transactions || []).forEach(tx => {
           if (tx.type === 'INGRESO' && tx.targetAccountId === acc.id) balance += tx.amount;
           if ((tx.type === 'GASTO' || tx.type === 'PAGO') && tx.sourceAccountId === acc.id) {
             balance -= convert(tx.amount, tx.currency || acc.currency, acc.currency);
@@ -552,7 +558,7 @@
       if (acc.type === 'CREDIT') {
         totalDebt = acc.currentDebt || 0;
         cutoffDebt = acc.cutoffDebt || 0;
-        appData.transactions.forEach(tx => {
+        (appData.transactions || []).forEach(tx => {
           if (tx.type === 'GASTO' && tx.sourceAccountId === acc.id) totalDebt += tx.amount;
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) {
             totalDebt -= tx.amount;
@@ -561,12 +567,12 @@
         });
         totalDebt = Math.max(0, totalDebt);
         cutoffDebt = Math.max(0, cutoffDebt);
-        return { balance: 0, totalDebt, cutoffDebt, isPaid: cutoffDebt === 0 };
+        return { balance: 0, totalDebt, cutoffDebt, isPaid: cutoffDebt === 0 && totalDebt === 0 };
       } 
       
       if (acc.type === 'SERVICE') {
         balance = acc.balance || 0;
-        appData.transactions.forEach(tx => {
+        (appData.transactions || []).forEach(tx => {
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) balance -= tx.amount;
         });
         balance = Math.max(0, balance);
@@ -575,7 +581,7 @@
       
       if (acc.type === 'LOAN') {
         totalDebt = acc.currentDebt || 0;
-        appData.transactions.forEach(tx => {
+        (appData.transactions || []).forEach(tx => {
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) totalDebt -= tx.amount;
         });
         totalDebt = Math.max(0, totalDebt);
@@ -632,7 +638,7 @@
 
     function payNoticeDirectly(accId) {
       openTxModal();
-      const acc = appData.accounts.find(a => a.id === accId);
+      const acc = (appData.accounts || []).find(a => a.id === accId);
       if (acc) {
         document.querySelector('input[name="txType"][value="PAGO"]').checked = true;
         toggleTxFormFields();
@@ -985,17 +991,17 @@
 
       if (type === 'GASTO') {
         sourceAccountId = document.getElementById('txGastoSource').value;
-        const srcAcc = appData.accounts.find(a => a.id === sourceAccountId);
+        const srcAcc = (appData.accounts || []).find(a => a.id === sourceAccountId);
         if (srcAcc) curr = srcAcc.currency;
       } else if (type === 'PAGO') {
         targetAccountId = document.getElementById('txPagoTarget').value;
         sourceAccountId = document.getElementById('txPagoSource').value;
         category = 'Pago de Servicios / Deuda';
-        const tgtAcc = appData.accounts.find(a => a.id === targetAccountId);
+        const tgtAcc = (appData.accounts || []).find(a => a.id === targetAccountId);
         if (tgtAcc) curr = tgtAcc.currency;
       } else if (type === 'INGRESO') {
         targetAccountId = document.getElementById('txIngresoTarget').value;
-        const tgtAcc = appData.accounts.find(a => a.id === targetAccountId);
+        const tgtAcc = (appData.accounts || []).find(a => a.id === targetAccountId);
         if (tgtAcc) curr = tgtAcc.currency;
       }
 
@@ -1010,7 +1016,7 @@
 
     function deleteTransaction(id) {
       if (confirm('¿Eliminar esta transacción?')) {
-        appData.transactions = appData.transactions.filter(t => t.id !== id);
+        appData.transactions = (appData.transactions || []).filter(t => t.id !== id);
         saveState();
       }
     }
@@ -1025,7 +1031,7 @@
     }
 
     function editAccount(id) {
-      const acc = appData.accounts.find(a => a.id === id);
+      const acc = (appData.accounts || []).find(a => a.id === id);
       if (!acc) return;
       document.getElementById('accEditId').value = acc.id;
       document.getElementById('accountModalTitle').innerHTML = `<i data-lucide="pencil" class="w-5 h-5 text-brand-500"></i> Editar Cuenta`;
@@ -1073,12 +1079,17 @@
       const name = document.getElementById('accName').value.trim();
       const type = document.getElementById('accType').value;
       const currency = document.getElementById('accCurrency').value;
+
       if (!name) return;
+      if (!appData.accounts) appData.accounts = [];
 
       if (editId) {
         const acc = appData.accounts.find(a => a.id === editId);
         if (acc) {
-          acc.name = name; acc.type = type; acc.currency = currency;
+          acc.name = name;
+          acc.type = type;
+          acc.currency = currency;
+
           if (type === 'CREDIT') {
             acc.cutoffDebt = parseFloat(document.getElementById('accCutoffDebt').value) || 0;
             acc.currentDebt = parseFloat(document.getElementById('accCurrentDebt').value) || 0;
@@ -1097,6 +1108,7 @@
         }
       } else {
         const newAcc = { id: 'acc-' + Date.now(), name, type, currency };
+
         if (type === 'CREDIT') {
           newAcc.cutoffDebt = parseFloat(document.getElementById('accCutoffDebt').value) || 0;
           newAcc.currentDebt = parseFloat(document.getElementById('accCurrentDebt').value) || 0;
@@ -1112,7 +1124,7 @@
         } else {
           newAcc.balance = parseFloat(document.getElementById('accBalance').value) || 0;
         }
-        if (!appData.accounts) appData.accounts = [];
+
         appData.accounts.push(newAcc);
       }
 
@@ -1123,7 +1135,7 @@
 
     function deleteAccount(id) {
       if (confirm('¿Eliminar esta cuenta?')) {
-        appData.accounts = appData.accounts.filter(a => a.id !== id);
+        appData.accounts = (appData.accounts || []).filter(a => a.id !== id);
         saveState();
       }
     }
@@ -1177,7 +1189,7 @@
 
     function openCloudModal() {
       if (localCloudConfig) {
-        document.getElementById('fbWorkspace').value = localCloudConfig.workspace || 'FinanzApp';
+        document.getElementById('fbWorkspace').value = localCloudConfig.workspace || 'FamiliaBlancoPerez';
         document.getElementById('fbApiKey').value = localCloudConfig.apiKey ? '••••••••••••••••••••' : '';
         document.getElementById('fbDbUrl').value = localCloudConfig.databaseURL ? '••••••••••••••••••••' : '';
       }
@@ -1212,7 +1224,7 @@
           });
         }
         
-        const path = 'workspaces/' + (localCloudConfig.workspace || 'FinanzApp');
+        const path = 'workspaces/' + (localCloudConfig.workspace || 'FamiliaBlancoPerez');
         dbRef = firebase.database().ref(path);
         
         dbRef.on('value', (snapshot) => {
@@ -1220,7 +1232,7 @@
           if (val) {
             isSyncingFromCloud = true;
             appData = val;
-            delete appData.firebaseConfig; // Asegurar que no se guarde adentro
+            delete appData.firebaseConfig;
             localStorage.setItem('finanzapp_data', JSON.stringify(appData));
             renderAll();
             isSyncingFromCloud = false;
