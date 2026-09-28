@@ -476,7 +476,6 @@
     let incomeExpenseChartInstance = null;
     let dbRef = null;
 
-    // Sanear estructuras iniciales
     if (!appData.accounts) appData.accounts = [];
     if (!appData.transactions) appData.transactions = [];
     if (!appData.categories) appData.categories = [];
@@ -574,6 +573,8 @@
         balance = acc.balance || 0;
         (appData.transactions || []).forEach(tx => {
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) balance -= tx.amount;
+          if (tx.type === 'INGRESO' && tx.targetAccountId === acc.id) balance += tx.amount;
+          if (tx.type === 'GASTO' && tx.sourceAccountId === acc.id) balance += tx.amount;
         });
         balance = Math.max(0, balance);
         return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance === 0 };
@@ -950,7 +951,7 @@
       document.getElementById('txGastoSource').innerHTML = liquidAndCredit.map(a => `<option value="${a.id}">${a.name} (${a.type === 'CREDIT' ? 'TDC' : 'Liquidez'})</option>`).join('');
       document.getElementById('txPagoTarget').innerHTML = payableAccs.map(a => `<option value="${a.id}">${a.name} (${a.type})</option>`).join('');
       document.getElementById('txPagoSource').innerHTML = liquidOnly.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-      document.getElementById('txIngresoTarget').innerHTML = liquidOnly.concat(allAccs.filter(a => a.type === 'SAVINGS')).map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      document.getElementById('txIngresoTarget').innerHTML = liquidOnly.concat(allAccs.filter(a => a.type === 'SAVINGS' || a.type === 'SERVICE')).map(a => `<option value="${a.id}">${a.name}</option>`).join('');
 
       const catHTML = (appData.categories || []).map(c => `<option value="${c}">${c}</option>`).join('');
       document.getElementById('txCategory').innerHTML = catHTML;
