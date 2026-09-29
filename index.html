@@ -260,7 +260,7 @@
 
   <!-- MODALS -->
   <div id="breakdownModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[80vh] flex flex-col">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[85vh] flex flex-col">
       <div class="flex items-center justify-between pb-2 border-b border-slate-800">
         <h3 id="breakdownTitle" class="font-bold text-base text-slate-100 flex items-center gap-2"></h3>
         <button onclick="closeBreakdownModal()" class="text-slate-400 hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -566,7 +566,9 @@
         });
         totalDebt = Math.max(0, totalDebt);
         cutoffDebt = Math.max(0, cutoffDebt);
-        return { balance: 0, totalDebt, cutoffDebt, isPaid: cutoffDebt === 0 && totalDebt === 0 };
+        // Si el monto a pagar (saldo al corte o deuda total) es <= 0 se considera PAGADO
+        const isPaid = cutoffDebt <= 0;
+        return { balance: 0, totalDebt, cutoffDebt, isPaid };
       } 
       
       if (acc.type === 'SERVICE') {
@@ -577,7 +579,7 @@
           if (tx.type === 'GASTO' && tx.sourceAccountId === acc.id) balance += tx.amount;
         });
         balance = Math.max(0, balance);
-        return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance === 0 };
+        return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance <= 0 };
       } 
       
       if (acc.type === 'LOAN') {
@@ -586,7 +588,7 @@
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) totalDebt -= tx.amount;
         });
         totalDebt = Math.max(0, totalDebt);
-        return { balance: 0, totalDebt, cutoffDebt: 0, isPaid: totalDebt === 0 };
+        return { balance: 0, totalDebt, cutoffDebt: 0, isPaid: totalDebt <= 0 };
       }
 
       return { balance: 0, totalDebt: 0, cutoffDebt: 0, isPaid: true };
@@ -604,7 +606,6 @@
         const details = calculateAccountDetails(acc);
         const dueAmount = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Si ya está pagado o el monto a pagar es 0, no mostrar en avisos
         if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && dueDay && !details.isPaid && dueAmount > 0) {
           let daysLeft = dueDay - todayDay;
           if (daysLeft < 0) daysLeft += 30;
@@ -696,9 +697,7 @@
       const modal = document.getElementById('breakdownModal');
       const titleEl = document.getElementById('breakdownTitle');
       const listEl = document.getElementById('breakdownList');
-      const totalEl = document.getElementById('breakdownTotal');
       listEl.innerHTML = '';
-      let runningTotal = 0;
       const mainCurr = appData.mainCurrency || 'CRC';
       const todayDay = new Date().getDate();
       const isFirstFortnight = todayDay <= 15;
@@ -737,26 +736,49 @@
         }
 
         if (include) {
-          if (type !== 'FORTNIGHT' || !details.isPaid) runningTotal += displayAmount;
           const div = document.createElement('div');
-          div.className = `flex items-center justify-between p-2 rounded-lg border ${details.isPaid && type === 'FORTNIGHT' ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-slate-800/60 border-slate-700/60'}`;
+          div.className = `flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition select-none ${details.isPaid && type === 'FORTNIGHT' ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-slate-800/80 border-slate-700/80'}`;
+          
           div.innerHTML = `
-            <div>
-              <p class="font-bold text-slate-200">${acc.name}</p>
-              <span class="text-[10px] ${details.isPaid && type === 'FORTNIGHT' ? 'text-emerald-400 font-bold' : 'text-slate-400'}">${noteText}</span>
+            <div class="flex items-center gap-2.5">
+              <input type="checkbox" checked data-amount="${displayAmount}" onchange="recalculateBreakdownTotal()" class="breakdown-item-cb w-4 h-4 rounded bg-slate-900 border-slate-700 text-brand-500 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+              <div>
+                <p class="font-bold text-slate-200">${acc.name}</p>
+                <span class="text-[10px] ${details.isPaid && type === 'FORTNIGHT' ? 'text-emerald-400 font-bold' : 'text-slate-400'}">${noteText}</span>
+              </div>
             </div>
             <span class="font-mono font-bold ${details.isPaid && type === 'FORTNIGHT' ? 'line-through text-slate-500' : (displayAmount < 0 ? 'text-rose-400' : 'text-slate-100')}">
               ${formatMoney(displayAmount, mainCurr)}
             </span>
           `;
+
+          div.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+              const cb = div.querySelector('.breakdown-item-cb');
+              cb.checked = !cb.checked;
+              recalculateBreakdownTotal();
+            }
+          });
+
           listEl.appendChild(div);
         }
       });
 
       if (!listEl.children.length) listEl.innerHTML = `<p class="text-center text-slate-500 py-4">Sin datos.</p>`;
-      totalEl.innerText = formatMoney(runningTotal, mainCurr);
+      recalculateBreakdownTotal();
       modal.classList.remove('hidden');
       lucide.createIcons();
+    }
+
+    function recalculateBreakdownTotal() {
+      const checkboxes = document.querySelectorAll('.breakdown-item-cb');
+      let sum = 0;
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sum += parseFloat(cb.getAttribute('data-amount')) || 0;
+        }
+      });
+      document.getElementById('breakdownTotal').innerText = formatMoney(sum, appData.mainCurrency || 'CRC');
     }
 
     function closeBreakdownModal() { document.getElementById('breakdownModal').classList.add('hidden'); }
