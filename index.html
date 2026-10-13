@@ -205,7 +205,7 @@
     <!-- VIEW 2: ACCOUNTS -->
     <section id="view-accounts" class="hidden space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-base font-bold text-slate-200">Cuentas</h2>
+        <h2 class="text-base font-bold text-slate-200">Cuentas Pendientes de Pago</h2>
         <button onclick="openAccountModal()" class="text-xs bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/30 font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 transition">
           <i data-lucide="plus" class="w-4 h-4"></i> Nueva Cuenta
         </button>
@@ -601,10 +601,13 @@
       list.innerHTML = '';
       
       const todayDay = new Date().getDate();
-      const isFirstFortnight = todayDay <= 15;
+      
+      // Del 10 al 19 -> Mostrar Pagos del 16 al 31
+      // Del 20 al 9 -> Mostrar Pagos del 1 al 15
+      const showSecondFortnight = (todayDay >= 10 && todayDay <= 19);
       
       if (badgeEl) {
-        badgeEl.innerText = isFirstFortnight ? 'Quincena 1-15' : 'Quincena 16-31';
+        badgeEl.innerText = showSecondFortnight ? 'Ver: Pagos (16-31)' : 'Ver: Pagos (1-15)';
       }
 
       let hasAlerts = false;
@@ -613,19 +616,18 @@
         const dueDay = acc.dueDay;
         if (!dueDay) return;
 
-        // Validar si el día fijado pertenece a la quincena actual
-        const belongsToCurrentFortnight = isFirstFortnight 
-          ? (dueDay >= 1 && dueDay <= 15) 
-          : (dueDay >= 16 && dueDay <= 31);
+        const belongsToCurrentCycle = showSecondFortnight 
+          ? (dueDay >= 16 && dueDay <= 31) 
+          : (dueDay >= 1 && dueDay <= 15);
 
-        if (!belongsToCurrentFortnight) return;
+        if (!belongsToCurrentCycle) return;
 
         const details = calculateAccountDetails(acc);
         const dueAmount = acc.type === 'LOAN' 
           ? (acc.monthlyPayment || details.totalDebt) 
           : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Solo permanece si está pendiente de pago
+        // Permanece en avisos solo si NO está pagado y el monto es > 0
         if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && !details.isPaid && dueAmount > 0) {
           hasAlerts = true;
 
@@ -640,7 +642,7 @@
             statusText = daysLeft === 1 ? 'Vence Mañana' : `Vence en ${daysLeft} días`;
             if (daysLeft <= 2) badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
           } else {
-            statusText = `Pasado (Día ${dueDay})`;
+            statusText = `Pendiente (Día ${dueDay})`;
             badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
           }
 
@@ -687,9 +689,9 @@
       const altCurr = mainCurr === 'CRC' ? 'USD' : 'CRC';
       let totalLiquidity = 0, totalSavings = 0, totalCreditDebt = 0, totalFortnight = 0;
       const todayDay = new Date().getDate();
-      const isFirstFortnight = todayDay <= 15;
+      const showSecondFortnight = (todayDay >= 10 && todayDay <= 19);
 
-      document.getElementById('fortnightLabel').innerText = isFirstFortnight ? 'A Pagar (1ra Qna 1-15)' : 'A Pagar (2da Qna 16-31)';
+      document.getElementById('fortnightLabel').innerText = showSecondFortnight ? 'A Pagar (2da Qna 16-31)' : 'A Pagar (1ra Qna 1-15)';
 
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
@@ -699,7 +701,7 @@
 
         const dueDay = acc.dueDay;
         if (dueDay) {
-          const belongs = isFirstFortnight ? (dueDay >= 1 && dueDay <= 15) : (dueDay >= 16 && dueDay <= 31);
+          const belongs = showSecondFortnight ? (dueDay >= 16 && dueDay <= 31) : (dueDay >= 1 && dueDay <= 15);
           if (belongs && !details.isPaid) {
             const amountToPay = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
             totalFortnight += convert(amountToPay, acc.currency, mainCurr);
@@ -729,13 +731,13 @@
       listEl.innerHTML = '';
       const mainCurr = appData.mainCurrency || 'CRC';
       const todayDay = new Date().getDate();
-      const isFirstFortnight = todayDay <= 15;
+      const showSecondFortnight = (todayDay >= 10 && todayDay <= 19);
 
       if (type === 'NET_WORTH') titleEl.innerHTML = `<i data-lucide="pie-chart" class="w-5 h-5 text-brand-400"></i> Desglose Patrimonio Neto`;
       else if (type === 'LIQUIDITY') titleEl.innerHTML = `<i data-lucide="wallet" class="w-5 h-5 text-emerald-400"></i> Liquidez Real`;
       else if (type === 'DEBT') titleEl.innerHTML = `<i data-lucide="credit-card" class="w-5 h-5 text-rose-400"></i> Deudas Totales`;
       else if (type === 'SAVINGS') titleEl.innerHTML = `<i data-lucide="piggy-bank" class="w-5 h-5 text-sky-400"></i> Cuentas de Ahorro`;
-      else if (type === 'FORTNIGHT') titleEl.innerHTML = `<i data-lucide="calendar" class="w-5 h-5 text-amber-400"></i> Pagos Quincena (${isFirstFortnight ? '1-15' : '16-31'})`;
+      else if (type === 'FORTNIGHT') titleEl.innerHTML = `<i data-lucide="calendar" class="w-5 h-5 text-amber-400"></i> Pagos Quincena (${showSecondFortnight ? '16-31' : '1-15'})`;
 
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
@@ -754,7 +756,7 @@
         } else if (type === 'FORTNIGHT') {
           const dueDay = acc.dueDay;
           if (dueDay) {
-            const belongs = isFirstFortnight ? (dueDay >= 1 && dueDay <= 15) : (dueDay >= 16 && dueDay <= 31);
+            const belongs = showSecondFortnight ? (dueDay >= 16 && dueDay <= 31) : (dueDay >= 1 && dueDay <= 15);
             if (belongs) {
               include = true;
               const dueVal = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
@@ -873,13 +875,20 @@
     function renderAccounts() {
       const container = document.getElementById('accountsList');
       container.innerHTML = '';
+      let visibleCount = 0;
 
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
         const isCredit = acc.type === 'CREDIT', isService = acc.type === 'SERVICE', isLoan = acc.type === 'LOAN', isSavings = acc.type === 'SAVINGS';
 
+        // Ocultar de la vista de "Cuentas" si es un compromiso/servicio ya pagado
+        if ((isCredit || isService || isLoan) && details.isPaid) {
+          return;
+        }
+
+        visibleCount++;
         const div = document.createElement('div');
-        div.className = `border p-3 rounded-xl space-y-2 transition ${details.isPaid ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-slate-800/90 border-slate-800'}`;
+        div.className = 'bg-slate-800/90 border border-slate-800 p-3 rounded-xl space-y-2 transition';
 
         let iconName = 'wallet', badgeStyle = 'bg-emerald-500/10 text-emerald-400', typeLabel = 'Cuenta Corriente';
         if (isCredit) { iconName = 'credit-card'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Tarjeta de Crédito'; }
@@ -887,20 +896,15 @@
         else if (isService) { iconName = 'zap'; badgeStyle = 'bg-amber-500/10 text-amber-400'; typeLabel = 'Servicio / Factura'; }
         else if (isLoan) { iconName = 'landmark'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Crédito Personal'; }
 
-        let statusTag = '';
-        if (isCredit || isService || isLoan) {
-          statusTag = details.isPaid ? '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] rounded-full font-bold">PAGADO</span>' : '<span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] rounded-full font-bold">PENDIENTE</span>';
-        }
-
         let balancesHTML = '';
         if (isCredit) {
           balancesHTML = `
             <div class="grid grid-cols-2 gap-2 pt-1">
-              <div><span class="text-xs text-slate-400 block">Saldo al Corte</span><span class="text-sm font-bold font-mono ${details.cutoffDebt === 0 ? 'text-emerald-400' : 'text-amber-400'}">${formatMoney(details.cutoffDebt, acc.currency)}</span></div>
-              <div><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-sm font-bold font-mono ${details.totalDebt === 0 ? 'text-emerald-400' : 'text-rose-400'}">${formatMoney(details.totalDebt, acc.currency)}</span></div>
+              <div><span class="text-xs text-slate-400 block">Saldo al Corte</span><span class="text-sm font-bold font-mono text-amber-400">${formatMoney(details.cutoffDebt, acc.currency)}</span></div>
+              <div><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-sm font-bold font-mono text-rose-400">${formatMoney(details.totalDebt, acc.currency)}</span></div>
             </div>`;
         } else if (isService) {
-          balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Monto Factura</span><span class="text-base font-bold font-mono ${details.balance === 0 ? 'text-emerald-400' : 'text-amber-400'}">${formatMoney(details.balance, acc.currency)}</span></div>`;
+          balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Monto Factura</span><span class="text-base font-bold font-mono text-amber-400">${formatMoney(details.balance, acc.currency)}</span></div>`;
         } else if (isLoan) {
           balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-base font-bold font-mono text-rose-400">${formatMoney(details.totalDebt, acc.currency)}</span></div>`;
         } else {
@@ -912,7 +916,7 @@
             <div class="flex items-center gap-2">
               <div class="p-2 rounded-lg ${badgeStyle}"><i data-lucide="${iconName}" class="w-5 h-5"></i></div>
               <div>
-                <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">${acc.name} ${statusTag}</h4>
+                <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">${acc.name}</h4>
                 <span class="text-xs text-slate-400">${acc.currency} • ${typeLabel}</span>
               </div>
             </div>
@@ -928,6 +932,10 @@
         `;
         container.appendChild(div);
       });
+
+      if (visibleCount === 0) {
+        container.innerHTML = `<p class="text-center text-xs text-slate-500 py-6">¡Excelente! No hay facturas ni deudas pendientes.</p>`;
+      }
     }
 
     function renderTransactions() {
