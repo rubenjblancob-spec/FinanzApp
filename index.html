@@ -552,7 +552,7 @@
             balance -= convert(tx.amount, tx.currency || acc.currency, acc.currency);
           }
         });
-        return { balance: Math.max(0, balance), totalDebt: 0, cutoffDebt: 0 };
+        return { balance: Math.max(0, balance), totalDebt: 0, cutoffDebt: 0, isPaid: true };
       } 
       
       if (acc.type === 'CREDIT') {
@@ -567,7 +567,7 @@
         });
         totalDebt = Math.max(0, totalDebt);
         cutoffDebt = Math.max(0, cutoffDebt);
-        return { balance: 0, totalDebt, cutoffDebt };
+        return { balance: 0, totalDebt, cutoffDebt, isPaid: cutoffDebt <= 0 };
       } 
       
       if (acc.type === 'SERVICE') {
@@ -578,7 +578,7 @@
           if (tx.type === 'GASTO' && tx.sourceAccountId === acc.id) balance += tx.amount;
         });
         balance = Math.max(0, balance);
-        return { balance, totalDebt: balance, cutoffDebt: 0 };
+        return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance <= 0 };
       } 
       
       if (acc.type === 'LOAN') {
@@ -587,25 +587,10 @@
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) totalDebt -= tx.amount;
         });
         totalDebt = Math.max(0, totalDebt);
-        return { balance: 0, totalDebt, cutoffDebt: 0 };
+        return { balance: 0, totalDebt, cutoffDebt: 0, isPaid: totalDebt <= 0 };
       }
 
-      return { balance: 0, totalDebt: 0, cutoffDebt: 0 };
-    }
-
-    // Verifica si ya existe un registro de PAGO en el historial para esta cuenta en el mes/año actual
-    function isPaidInCurrentMonth(accountId) {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-
-      return (appData.transactions || []).some(tx => {
-        if (tx.type === 'PAGO' && tx.targetAccountId === accountId && tx.date) {
-          const txDate = new Date(tx.date);
-          return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
-        }
-        return false;
-      });
+      return { balance: 0, totalDebt: 0, cutoffDebt: 0, isPaid: true };
     }
 
     // Evalúa si la cuenta cae dentro del ciclo de quincena activo
@@ -639,16 +624,13 @@
         const dueDay = acc.dueDay;
         if (!dueDay || !isDueInCurrentCycle(dueDay, todayDay)) return;
 
-        // Si ya tiene un pago registrado en el historial para el mes actual, NO se notifica
-        if (isPaidInCurrentMonth(acc.id)) return;
-
         const details = calculateAccountDetails(acc);
         const dueAmount = acc.type === 'LOAN' 
           ? (acc.monthlyPayment || details.totalDebt) 
           : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Muestra únicamente cuentas pendientes con monto mayor a cero (> 0)
-        if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && dueAmount > 0) {
+        // Notifica únicamente si la cuenta NO está pagada (!isPaid) según la lógica de cuentas y su monto > 0
+        if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && !details.isPaid && dueAmount > 0) {
           hasAlerts = true;
 
           let daysLeft = dueDay - todayDay;
@@ -710,8 +692,8 @@
 
         const dueDay = acc.dueDay;
         if (dueDay && isDueInCurrentCycle(dueDay, todayDay)) {
-          // Solo se suma si no ha sido pagada en el historial del mes actual
-          if (!isPaidInCurrentMonth(acc.id)) {
+          // Suma únicamente si pertenece al ciclo actual, no está pagado (!isPaid) y el monto > 0
+          if (!details.isPaid) {
             const amountToPay = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
             if (amountToPay > 0) {
               totalFortnight += convert(amountToPay, acc.currency, mainCurr);
@@ -766,7 +748,7 @@
           include = true; displayAmount = convert(details.balance, acc.currency, mainCurr);
         } else if (type === 'FORTNIGHT') {
           const dueDay = acc.dueDay;
-          if (dueDay && isDueInCurrentCycle(dueDay, todayDay) && !isPaidInCurrentMonth(acc.id)) {
+          if (dueDay && isDueInCurrentCycle(dueDay, todayDay) && !details.isPaid) {
             const dueVal = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
             if (dueVal > 0) {
               include = true;
