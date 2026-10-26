@@ -552,7 +552,7 @@
             balance -= convert(tx.amount, tx.currency || acc.currency, acc.currency);
           }
         });
-        return { balance: Math.max(0, balance), totalDebt: 0, cutoffDebt: 0, isPaid: true };
+        return { balance: Math.max(0, balance), totalDebt: 0, cutoffDebt: 0 };
       } 
       
       if (acc.type === 'CREDIT') {
@@ -567,8 +567,7 @@
         });
         totalDebt = Math.max(0, totalDebt);
         cutoffDebt = Math.max(0, cutoffDebt);
-        const isPaid = cutoffDebt <= 0;
-        return { balance: 0, totalDebt, cutoffDebt, isPaid };
+        return { balance: 0, totalDebt, cutoffDebt };
       } 
       
       if (acc.type === 'SERVICE') {
@@ -579,7 +578,7 @@
           if (tx.type === 'GASTO' && tx.sourceAccountId === acc.id) balance += tx.amount;
         });
         balance = Math.max(0, balance);
-        return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance <= 0 };
+        return { balance, totalDebt: balance, cutoffDebt: 0 };
       } 
       
       if (acc.type === 'LOAN') {
@@ -588,13 +587,28 @@
           if (tx.type === 'PAGO' && tx.targetAccountId === acc.id) totalDebt -= tx.amount;
         });
         totalDebt = Math.max(0, totalDebt);
-        return { balance: 0, totalDebt, cutoffDebt: 0, isPaid: totalDebt <= 0 };
+        return { balance: 0, totalDebt, cutoffDebt: 0 };
       }
 
-      return { balance: 0, totalDebt: 0, cutoffDebt: 0, isPaid: true };
+      return { balance: 0, totalDebt: 0, cutoffDebt: 0 };
     }
 
-    // Comprueba si un día límite cae dentro del rango del ciclo actual
+    // Verifica si ya existe un registro de PAGO en el historial para esta cuenta en el mes/año actual
+    function isPaidInCurrentMonth(accountId) {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      return (appData.transactions || []).some(tx => {
+        if (tx.type === 'PAGO' && tx.targetAccountId === accountId && tx.date) {
+          const txDate = new Date(tx.date);
+          return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+        }
+        return false;
+      });
+    }
+
+    // Evalúa si la cuenta cae dentro del ciclo de quincena activo
     function isDueInCurrentCycle(dueDay, todayDay) {
       if (!dueDay) return false;
       const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
@@ -602,7 +616,6 @@
       if (isPeriod10to23) {
         return dueDay >= 10 && dueDay <= 23;
       } else {
-        // Del 24 al 09 del mes siguiente
         return dueDay >= 24 || dueDay <= 9;
       }
     }
@@ -626,13 +639,16 @@
         const dueDay = acc.dueDay;
         if (!dueDay || !isDueInCurrentCycle(dueDay, todayDay)) return;
 
+        // Si ya tiene un pago registrado en el historial para el mes actual, NO se notifica
+        if (isPaidInCurrentMonth(acc.id)) return;
+
         const details = calculateAccountDetails(acc);
         const dueAmount = acc.type === 'LOAN' 
           ? (acc.monthlyPayment || details.totalDebt) 
           : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Muestra únicamente cuentas no pagadas con monto mayor a cero (> 0)
-        if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && !details.isPaid && dueAmount > 0) {
+        // Muestra únicamente cuentas pendientes con monto mayor a cero (> 0)
+        if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && dueAmount > 0) {
           hasAlerts = true;
 
           let daysLeft = dueDay - todayDay;
@@ -694,11 +710,12 @@
 
         const dueDay = acc.dueDay;
         if (dueDay && isDueInCurrentCycle(dueDay, todayDay)) {
-          const amountToPay = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
-          
-          // Suma en la tarjeta únicamente si pertenece a la quincenas activa, no está pagado y es > 0
-          if (!details.isPaid && amountToPay > 0) {
-            totalFortnight += convert(amountToPay, acc.currency, mainCurr);
+          // Solo se suma si no ha sido pagada en el historial del mes actual
+          if (!isPaidInCurrentMonth(acc.id)) {
+            const amountToPay = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
+            if (amountToPay > 0) {
+              totalFortnight += convert(amountToPay, acc.currency, mainCurr);
+            }
           }
         }
       });
@@ -749,11 +766,9 @@
           include = true; displayAmount = convert(details.balance, acc.currency, mainCurr);
         } else if (type === 'FORTNIGHT') {
           const dueDay = acc.dueDay;
-          if (dueDay && isDueInCurrentCycle(dueDay, todayDay)) {
+          if (dueDay && isDueInCurrentCycle(dueDay, todayDay) && !isPaidInCurrentMonth(acc.id)) {
             const dueVal = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
-            
-            // Mostrar únicamente ítems pendientes con monto > 0
-            if (!details.isPaid && dueVal > 0) {
+            if (dueVal > 0) {
               include = true;
               displayAmount = convert(dueVal, acc.currency, mainCurr);
               noteText = `Pendiente (Día ${dueDay})`;
@@ -871,13 +886,13 @@
       const container = document.getElementById('accountsList');
       container.innerHTML = '';
 
-      // Muestra TODAS las cuentas sin filtrar por saldo o estado
+      // Muestra TODAS las cuentas sin etiquetas de "PAGADO" / "PENDIENTE"
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
         const isCredit = acc.type === 'CREDIT', isService = acc.type === 'SERVICE', isLoan = acc.type === 'LOAN', isSavings = acc.type === 'SAVINGS';
 
         const div = document.createElement('div');
-        div.className = `border p-3 rounded-xl space-y-2 transition ${details.isPaid && (isCredit || isService || isLoan) ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-slate-800/90 border-slate-800'}`;
+        div.className = 'border p-3 rounded-xl space-y-2 transition bg-slate-800/90 border-slate-800';
 
         let iconName = 'wallet', badgeStyle = 'bg-emerald-500/10 text-emerald-400', typeLabel = 'Cuenta Corriente';
         if (isCredit) { iconName = 'credit-card'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Tarjeta de Crédito'; }
@@ -885,22 +900,15 @@
         else if (isService) { iconName = 'zap'; badgeStyle = 'bg-amber-500/10 text-amber-400'; typeLabel = 'Servicio / Factura'; }
         else if (isLoan) { iconName = 'landmark'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Crédito Personal'; }
 
-        let statusTag = '';
-        if (isCredit || isService || isLoan) {
-          statusTag = details.isPaid 
-            ? '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] rounded-full font-bold">PAGADO</span>' 
-            : '<span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] rounded-full font-bold">PENDIENTE</span>';
-        }
-
         let balancesHTML = '';
         if (isCredit) {
           balancesHTML = `
             <div class="grid grid-cols-2 gap-2 pt-1">
-              <div><span class="text-xs text-slate-400 block">Saldo al Corte</span><span class="text-sm font-bold font-mono ${details.cutoffDebt === 0 ? 'text-emerald-400' : 'text-amber-400'}">${formatMoney(details.cutoffDebt, acc.currency)}</span></div>
-              <div><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-sm font-bold font-mono ${details.totalDebt === 0 ? 'text-emerald-400' : 'text-rose-400'}">${formatMoney(details.totalDebt, acc.currency)}</span></div>
+              <div><span class="text-xs text-slate-400 block">Saldo al Corte</span><span class="text-sm font-bold font-mono text-amber-400">${formatMoney(details.cutoffDebt, acc.currency)}</span></div>
+              <div><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-sm font-bold font-mono text-rose-400">${formatMoney(details.totalDebt, acc.currency)}</span></div>
             </div>`;
         } else if (isService) {
-          balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Monto Factura</span><span class="text-base font-bold font-mono ${details.balance === 0 ? 'text-emerald-400' : 'text-amber-400'}">${formatMoney(details.balance, acc.currency)}</span></div>`;
+          balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Monto Factura</span><span class="text-base font-bold font-mono text-amber-400">${formatMoney(details.balance, acc.currency)}</span></div>`;
         } else if (isLoan) {
           balancesHTML = `<div class="pt-1"><span class="text-xs text-slate-400 block">Total Adeudado</span><span class="text-base font-bold font-mono text-rose-400">${formatMoney(details.totalDebt, acc.currency)}</span></div>`;
         } else {
@@ -912,7 +920,7 @@
             <div class="flex items-center gap-2">
               <div class="p-2 rounded-lg ${badgeStyle}"><i data-lucide="${iconName}" class="w-5 h-5"></i></div>
               <div>
-                <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">${acc.name} ${statusTag}</h4>
+                <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">${acc.name}</h4>
                 <span class="text-xs text-slate-400">${acc.currency} • ${typeLabel}</span>
               </div>
             </div>
