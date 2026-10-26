@@ -594,6 +594,19 @@
       return { balance: 0, totalDebt: 0, cutoffDebt: 0, isPaid: true };
     }
 
+    // Comprueba si un día límite cae dentro del rango del ciclo actual
+    function isDueInCurrentCycle(dueDay, todayDay) {
+      if (!dueDay) return false;
+      const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
+      
+      if (isPeriod10to23) {
+        return dueDay >= 10 && dueDay <= 23;
+      } else {
+        // Del 24 al 09 del mes siguiente
+        return dueDay >= 24 || dueDay <= 9;
+      }
+    }
+
     function renderAlerts() {
       const container = document.getElementById('alertsContainer');
       const list = document.getElementById('alertsList');
@@ -601,34 +614,24 @@
       list.innerHTML = '';
       
       const todayDay = new Date().getDate();
-      
-      // Lógica de rangos quincenales corregida:
-      // - Días 15 al 31 del mes: Evalúa pagos entre el día 15 y el 30/31
-      // - Días 1 al 14 del mes: Evalúa pagos entre el día 1 y el 14
-      const isLateFortnight = todayDay >= 15;
+      const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
       
       if (badgeEl) {
-        badgeEl.innerText = isLateFortnight ? 'Pendientes (15-30)' : 'Pendientes (01-14)';
+        badgeEl.innerText = isPeriod10to23 ? 'Pendientes (10-23)' : 'Pendientes (24-09)';
       }
 
       let hasAlerts = false;
 
       (appData.accounts || []).forEach(acc => {
         const dueDay = acc.dueDay;
-        if (!dueDay) return;
-
-        const belongsToCurrentCycle = isLateFortnight 
-          ? (dueDay >= 15 && dueDay <= 31) 
-          : (dueDay >= 1 && dueDay <= 14);
-
-        if (!belongsToCurrentCycle) return;
+        if (!dueDay || !isDueInCurrentCycle(dueDay, todayDay)) return;
 
         const details = calculateAccountDetails(acc);
         const dueAmount = acc.type === 'LOAN' 
           ? (acc.monthlyPayment || details.totalDebt) 
           : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Muestra únicamente cuentas no pagadas con monto > 0
+        // Muestra únicamente cuentas no pagadas con monto mayor a cero (> 0)
         if ((acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN') && !details.isPaid && dueAmount > 0) {
           hasAlerts = true;
 
@@ -679,9 +682,9 @@
       const altCurr = mainCurr === 'CRC' ? 'USD' : 'CRC';
       let totalLiquidity = 0, totalSavings = 0, totalCreditDebt = 0, totalFortnight = 0;
       const todayDay = new Date().getDate();
-      const isLateFortnight = todayDay >= 15;
+      const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
 
-      document.getElementById('fortnightLabel').innerText = isLateFortnight ? 'A Pagar (15-30)' : 'A Pagar (01-14)';
+      document.getElementById('fortnightLabel').innerText = isPeriod10to23 ? 'A Pagar (10-23)' : 'A Pagar (24-09)';
 
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
@@ -690,12 +693,11 @@
         else if (acc.type === 'CREDIT' || acc.type === 'LOAN' || acc.type === 'SERVICE') totalCreditDebt += convert(details.totalDebt, acc.currency, mainCurr);
 
         const dueDay = acc.dueDay;
-        if (dueDay) {
-          const belongs = isLateFortnight ? (dueDay >= 15 && dueDay <= 31) : (dueDay >= 1 && dueDay <= 14);
+        if (dueDay && isDueInCurrentCycle(dueDay, todayDay)) {
           const amountToPay = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
           
-          // Suma en la tarjeta únicamente cuentas pendientes de la quincena actual con monto > 0
-          if (belongs && !details.isPaid && amountToPay > 0) {
+          // Suma en la tarjeta únicamente si pertenece a la quincenas activa, no está pagado y es > 0
+          if (!details.isPaid && amountToPay > 0) {
             totalFortnight += convert(amountToPay, acc.currency, mainCurr);
           }
         }
@@ -723,13 +725,13 @@
       listEl.innerHTML = '';
       const mainCurr = appData.mainCurrency || 'CRC';
       const todayDay = new Date().getDate();
-      const isLateFortnight = todayDay >= 15;
+      const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
 
       if (type === 'NET_WORTH') titleEl.innerHTML = `<i data-lucide="pie-chart" class="w-5 h-5 text-brand-400"></i> Desglose Patrimonio Neto`;
       else if (type === 'LIQUIDITY') titleEl.innerHTML = `<i data-lucide="wallet" class="w-5 h-5 text-emerald-400"></i> Liquidez Real`;
       else if (type === 'DEBT') titleEl.innerHTML = `<i data-lucide="credit-card" class="w-5 h-5 text-rose-400"></i> Deudas Totales`;
       else if (type === 'SAVINGS') titleEl.innerHTML = `<i data-lucide="piggy-bank" class="w-5 h-5 text-sky-400"></i> Cuentas de Ahorro`;
-      else if (type === 'FORTNIGHT') titleEl.innerHTML = `<i data-lucide="calendar" class="w-5 h-5 text-amber-400"></i> Pagos Quincena (${isLateFortnight ? '15-30' : '01-14'})`;
+      else if (type === 'FORTNIGHT') titleEl.innerHTML = `<i data-lucide="calendar" class="w-5 h-5 text-amber-400"></i> Pagos Quincena (${isPeriod10to23 ? '10-23' : '24-09'})`;
 
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
@@ -747,12 +749,11 @@
           include = true; displayAmount = convert(details.balance, acc.currency, mainCurr);
         } else if (type === 'FORTNIGHT') {
           const dueDay = acc.dueDay;
-          if (dueDay) {
-            const belongs = isLateFortnight ? (dueDay >= 15 && dueDay <= 31) : (dueDay >= 1 && dueDay <= 14);
+          if (dueDay && isDueInCurrentCycle(dueDay, todayDay)) {
             const dueVal = acc.type === 'LOAN' ? (acc.monthlyPayment || details.totalDebt) : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
             
             // Mostrar únicamente ítems pendientes con monto > 0
-            if (belongs && !details.isPaid && dueVal > 0) {
+            if (!details.isPaid && dueVal > 0) {
               include = true;
               displayAmount = convert(dueVal, acc.currency, mainCurr);
               noteText = `Pendiente (Día ${dueDay})`;
@@ -870,7 +871,7 @@
       const container = document.getElementById('accountsList');
       container.innerHTML = '';
 
-      // Muestra TODAS las cuentas registradas sin filtrar
+      // Muestra TODAS las cuentas sin filtrar por saldo o estado
       (appData.accounts || []).forEach(acc => {
         const details = calculateAccountDetails(acc);
         const isCredit = acc.type === 'CREDIT', isService = acc.type === 'SERVICE', isLoan = acc.type === 'LOAN', isSavings = acc.type === 'SAVINGS';
