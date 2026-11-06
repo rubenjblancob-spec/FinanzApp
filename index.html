@@ -355,7 +355,7 @@
         <input type="hidden" id="accEditId" value="">
         <div>
           <label class="text-slate-400 mb-1 block font-medium">Nombre de la Cuenta</label>
-          <input type="text" id="accName" required placeholder="Ej. BAC Débito / Liberty" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
+          <input type="text" id="accName" required placeholder="Ej. BAC Débito / Liberty / Alquiler" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
@@ -571,7 +571,7 @@
       } 
       
       if (acc.type === 'SERVICE') {
-        // En los servicios, el balance ingresado representa la factura actual pendiente
+        // En servicios/alquileres, el balance representa la factura actual cargada manualmente
         balance = acc.balance || 0;
         return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance <= 0 };
       } 
@@ -588,7 +588,7 @@
       return { balance: 0, totalDebt: 0, cutoffDebt: 0, isPaid: true };
     }
 
-    // Evalúa si la cuenta cae dentro del ciclo activo o si tiene atrasos pendientes
+    // Evalúa si el día límite está dentro del ciclo quincenal activo o si fue un pago no realizado del ciclo activo
     function isDueInCurrentCycle(dueDay, todayDay) {
       if (!dueDay) return false;
       const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
@@ -596,6 +596,7 @@
       if (isPeriod10to23) {
         return dueDay >= 10 && dueDay <= 23;
       } else {
+        // Ciclo 24 al 09 (cubre días >= 24 del mes actual, días <= 9 del mes siguiente o días pasados dentro del ciclo)
         return dueDay >= 24 || dueDay <= 9 || dueDay < todayDay;
       }
     }
@@ -630,23 +631,29 @@
         if (!details.isPaid && dueAmount > 0 && isDueInCurrentCycle(dueDay, todayDay)) {
           hasAlerts = true;
 
-          let daysLeft = dueDay - todayDay;
           let statusText = '';
           let badgeColor = '';
 
-          if (daysLeft === 0) {
+          // Cálculo con soporte para cruce de mes (ciclo 24-09)
+          if (dueDay === todayDay) {
             statusText = 'Vence HOY';
             badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-          } else if (daysLeft > 0) {
+          } else if (!isPeriod10to23 && todayDay >= 24 && dueDay <= 9) {
+            // La fecha límite cae a inicios del mes siguiente (ej. Día 2)
+            const daysLeft = (30 - todayDay) + dueDay; // Estimación simple de días
+            statusText = `Vence en ${daysLeft} días`;
+            badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+          } else if (todayDay > dueDay && !(dueDay <= 9 && todayDay >= 24)) {
+            // El día de pago ya pasó dentro de la quincena actual (Atrasado)
+            const daysOverdue = todayDay - dueDay;
+            statusText = `Atrasado por ${daysOverdue} ${daysOverdue === 1 ? 'día' : 'días'}`;
+            badgeColor = 'bg-rose-500/30 text-rose-300 border-rose-500/50 font-extrabold';
+          } else {
+            const daysLeft = dueDay - todayDay;
             statusText = `Vence en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`;
             badgeColor = daysLeft <= 2 
               ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
               : 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-          } else {
-            // El día de pago ya pasó dentro de la quincena (atrasado)
-            const daysOverdue = Math.abs(daysLeft);
-            statusText = `Atrasado por ${daysOverdue} ${daysOverdue === 1 ? 'día' : 'días'}`;
-            badgeColor = 'bg-rose-500/30 text-rose-300 border-rose-500/50 font-extrabold';
           }
 
           const div = document.createElement('div');
@@ -654,7 +661,7 @@
           div.innerHTML = `
             <div>
               <span class="font-bold text-slate-200 block">${acc.name}</span>
-              <span class="text-[10px] text-slate-400">${acc.type === 'CREDIT' ? 'Tarjeta' : (acc.type === 'SERVICE' ? 'Servicio' : 'Crédito')}</span>
+              <span class="text-[10px] text-slate-400">${acc.type === 'CREDIT' ? 'Tarjeta' : (acc.type === 'SERVICE' ? 'Servicio / Alquiler' : 'Crédito')}</span>
             </div>
             <div class="flex items-center gap-2">
               <div class="text-right">
@@ -1067,7 +1074,7 @@
 
       appData.transactions.push({ id: 'tx-' + Date.now(), type, sourceAccountId, targetAccountId, amount, currency: curr, date, category, description });
       
-      // Si la transacción es de tipo PAGO para un servicio, se ajusta automáticamente el monto del servicio a 0
+      // Al registrar un PAGO sobre una cuenta de tipo SERVICE, el monto pendiente vuelve automáticamente a 0
       if (type === 'PAGO' && targetAccountId) {
         const tgtAcc = (appData.accounts || []).find(a => a.id === targetAccountId);
         if (tgtAcc && tgtAcc.type === 'SERVICE') {
