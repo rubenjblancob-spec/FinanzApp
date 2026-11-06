@@ -366,7 +366,7 @@
               <option value="SAVINGS">Cuenta de Ahorro</option>
               <option value="CREDIT">Tarjeta de Crédito (TDC)</option>
               <option value="LOAN">Crédito Personal</option>
-              <option value="SERVICE">Servicio / Factura</option>
+              <option value="SERVICE">Servicio / Factura / Alquiler</option>
             </select>
           </div>
           <div>
@@ -402,7 +402,7 @@
           </div>
           <div>
             <label class="text-slate-400 mb-1 block font-medium">Día Límite de Pago (1-31)</label>
-            <input type="number" id="accDueDay" min="1" max="31" placeholder="Ej. 2" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
+            <input type="number" id="accDueDay" min="1" max="31" placeholder="Ej. 30" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-200 text-sm">
           </div>
         </div>
         <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-extrabold py-3 rounded-xl shadow transition text-sm mt-2">Guardar Cuenta</button>
@@ -571,7 +571,7 @@
       } 
       
       if (acc.type === 'SERVICE') {
-        // En servicios/alquileres, el balance representa la factura actual cargada manualmente
+        // En los servicios/alquileres, el balance ingresado representa la factura actual cargada manualmente
         balance = acc.balance || 0;
         return { balance, totalDebt: balance, cutoffDebt: 0, isPaid: balance <= 0 };
       } 
@@ -596,8 +596,8 @@
       if (isPeriod10to23) {
         return dueDay >= 10 && dueDay <= 23;
       } else {
-        // Ciclo 24 al 09 (cubre días >= 24 del mes actual, días <= 9 del mes siguiente o días pasados dentro del ciclo)
-        return dueDay >= 24 || dueDay <= 9 || dueDay < todayDay;
+        // En el rango 24-09, entran los días >= 24, <= 9, y cuentas pendientes con atrasos
+        return dueDay >= 24 || dueDay <= 9 || todayDay > dueDay;
       }
     }
 
@@ -607,7 +607,8 @@
       const badgeEl = document.getElementById('alertsFortnightBadge');
       list.innerHTML = '';
       
-      const todayDay = new Date().getDate();
+      const today = new Date();
+      const todayDay = today.getDate();
       const isPeriod10to23 = (todayDay >= 10 && todayDay <= 23);
       
       if (badgeEl) {
@@ -619,7 +620,7 @@
       (appData.accounts || []).forEach(acc => {
         const dueDay = acc.dueDay;
         
-        // Evalúa solo tipos de cuenta que tienen fecha límite de pago
+        // Evalúa solo tarjetas, préstamos o servicios/alquileres
         if (!dueDay || !(acc.type === 'CREDIT' || acc.type === 'SERVICE' || acc.type === 'LOAN')) return;
 
         const details = calculateAccountDetails(acc);
@@ -627,29 +628,44 @@
           ? (acc.monthlyPayment || details.totalDebt) 
           : (acc.type === 'CREDIT' ? details.cutoffDebt : details.balance);
 
-        // Si NO está pagada, tiene monto mayor a cero y está en el ciclo actual
+        // Si NO está pagada, el monto es mayor a cero y pertenece al ciclo o está atrasada
         if (!details.isPaid && dueAmount > 0 && isDueInCurrentCycle(dueDay, todayDay)) {
           hasAlerts = true;
 
           let statusText = '';
           let badgeColor = '';
+          let isOverdue = false;
+          let daysOverdue = 0;
 
-          // Cálculo con soporte para cruce de mes (ciclo 24-09)
-          if (dueDay === todayDay) {
-            statusText = 'Vence HOY';
-            badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-          } else if (!isPeriod10to23 && todayDay >= 24 && dueDay <= 9) {
-            // La fecha límite cae a inicios del mes siguiente (ej. Día 2)
-            const daysLeft = (30 - todayDay) + dueDay; // Estimación simple de días
-            statusText = `Vence en ${daysLeft} días`;
-            badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-          } else if (todayDay > dueDay && !(dueDay <= 9 && todayDay >= 24)) {
-            // El día de pago ya pasó dentro de la quincena actual (Atrasado)
-            const daysOverdue = todayDay - dueDay;
+          if (!isPeriod10to23) {
+            // Quincena 24 a 09
+            if (todayDay >= 24 && dueDay < todayDay) {
+              isOverdue = true;
+              daysOverdue = todayDay - dueDay;
+            } else if (todayDay <= 9 && dueDay >= 24) {
+              // Ejemplo: vence el 30 (de sept/oct) y hoy es 5 de nov (atraso real transcurrido)
+              isOverdue = true;
+              daysOverdue = (31 - dueDay) + todayDay;
+            } else if (todayDay <= 9 && dueDay < todayDay) {
+              isOverdue = true;
+              daysOverdue = todayDay - dueDay;
+            }
+          } else {
+            // Quincena 10 a 23
+            if (todayDay > dueDay) {
+              isOverdue = true;
+              daysOverdue = todayDay - dueDay;
+            }
+          }
+
+          if (isOverdue) {
             statusText = `Atrasado por ${daysOverdue} ${daysOverdue === 1 ? 'día' : 'días'}`;
             badgeColor = 'bg-rose-500/30 text-rose-300 border-rose-500/50 font-extrabold';
+          } else if (dueDay === todayDay) {
+            statusText = 'Vence HOY';
+            badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
           } else {
-            const daysLeft = dueDay - todayDay;
+            let daysLeft = dueDay > todayDay ? (dueDay - todayDay) : ((30 - todayDay) + dueDay);
             statusText = `Vence en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'}`;
             badgeColor = daysLeft <= 2 
               ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
@@ -761,7 +777,7 @@
           include = true; displayAmount = convert(details.balance, acc.currency, mainCurr);
         } else if (type === 'DEBT' && (acc.type === 'CREDIT' || acc.type === 'LOAN' || acc.type === 'SERVICE')) {
           include = true; displayAmount = convert(details.totalDebt, acc.currency, mainCurr);
-          noteText = acc.type === 'LOAN' ? 'Crédito' : (acc.type === 'SERVICE' ? 'Servicio' : 'TDC');
+          noteText = acc.type === 'LOAN' ? 'Crédito' : (acc.type === 'SERVICE' ? 'Servicio / Alquiler' : 'TDC');
         } else if (type === 'SAVINGS' && acc.type === 'SAVINGS') {
           include = true; displayAmount = convert(details.balance, acc.currency, mainCurr);
         } else if (type === 'FORTNIGHT') {
@@ -896,7 +912,7 @@
         let iconName = 'wallet', badgeStyle = 'bg-emerald-500/10 text-emerald-400', typeLabel = 'Cuenta Corriente';
         if (isCredit) { iconName = 'credit-card'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Tarjeta de Crédito'; }
         else if (isSavings) { iconName = 'piggy-bank'; badgeStyle = 'bg-sky-500/10 text-sky-400'; typeLabel = 'Cuenta de Ahorro'; }
-        else if (isService) { iconName = 'zap'; badgeStyle = 'bg-amber-500/10 text-amber-400'; typeLabel = 'Servicio / Factura'; }
+        else if (isService) { iconName = 'zap'; badgeStyle = 'bg-amber-500/10 text-amber-400'; typeLabel = 'Servicio / Factura / Alquiler'; }
         else if (isLoan) { iconName = 'landmark'; badgeStyle = 'bg-rose-500/10 text-rose-400'; typeLabel = 'Crédito Personal'; }
 
         let balancesHTML = '';
